@@ -5,7 +5,7 @@ import { parseCommand } from '../utils/nlp';
 export const useStore = create(
   persist(
     (set, get) => ({
-      // --- CORE IDENTITY ---
+      // --- IDENTITY CORE ---
       user: { 
         name: "Commander",
         sleepGoal: 8,
@@ -16,7 +16,10 @@ export const useStore = create(
       schedule: [],
       status: "idle", // 'idle', 'listening', 'processing'
       
-      // --- ANALYSIS MODE STATE (Feature 3) ---
+      // --- SYSTEM LOGS (Feature 25) ---
+      logs: [],
+
+      // --- ANALYSIS MODE STATE ---
       isAnalysisMode: false,
       currentQuestionIndex: 0,
       dailyAnswers: [],
@@ -32,28 +35,36 @@ export const useStore = create(
 
       setStatus: (status) => set({ status }),
 
-      // Feature 4: Update Profile Data
-      updateUser: (userData) => set((state) => ({
-        user: { ...state.user, ...userData }
-      })),
+      // Update User & Log it
+      updateUser: (userData) => set((state) => {
+        const newLog = {
+            id: Date.now(),
+            timestamp: new Date().toLocaleTimeString(),
+            message: `User profile updated: ${Object.keys(userData).join(", ")}`,
+            type: 'success'
+        };
+        return { 
+            user: { ...state.user, ...userData },
+            logs: [newLog, ...state.logs].slice(0, 50)
+        };
+      }),
 
-      // Feature 3: Analysis Logic
       setAnalysisMode: (active) => set({ isAnalysisMode: active }),
       
       submitAnswer: (answer) => set((state) => {
-        // Save the answer
         const newAnswers = [...state.dailyAnswers, { 
             question: state.questions[state.currentQuestionIndex], 
             answer, 
             timestamp: new Date().toISOString() 
         }];
         
-        // Move to next question
         const nextIndex = state.currentQuestionIndex + 1;
         const isFinished = nextIndex >= state.questions.length;
 
-        // If finished, close mode and add a review task
+        // If finished, add a review task
         let newSchedule = state.schedule;
+        let logMsg = null;
+
         if (isFinished) {
             const reviewTask = {
                 id: Date.now(),
@@ -63,88 +74,106 @@ export const useStore = create(
                 dateObj: new Date(),
                 notified: false
             };
-            newSchedule = [...state.schedule, reviewTask]; 
-            // We re-sort schedule just in case
-            newSchedule.sort((a, b) => {
+            newSchedule = [...state.schedule, reviewTask].sort((a, b) => {
+                 if (!a.dateObj && !b.dateObj) return 0;
                  if (!a.dateObj) return 1;
                  if (!b.dateObj) return -1;
                  return new Date(a.dateObj) - new Date(b.dateObj);
             });
+            logMsg = "Daily Neural Alignment complete.";
         }
+
+        const newLog = logMsg ? {
+            id: Date.now(),
+            timestamp: new Date().toLocaleTimeString(),
+            message: logMsg,
+            type: 'success'
+        } : null;
 
         return {
             dailyAnswers: newAnswers,
             currentQuestionIndex: isFinished ? 0 : nextIndex,
             isAnalysisMode: !isFinished,
-            schedule: newSchedule
+            schedule: newSchedule,
+            logs: newLog ? [newLog, ...state.logs].slice(0, 50) : state.logs
         };
       }),
 
-      // Feature 17: Notification Tracker
       markAsNotified: (id) => set((state) => ({
         schedule: state.schedule.map(t => 
             t.id === id ? { ...t, notified: true } : t
         )
       })),
 
-      // Feature 1 & 14: Add Task + Conflict Detection
       addTask: (input) => set((state) => {
-        // 1. Parse the input (NLP)
         const data = parseCommand(input);
         
-        // 2. Conflict Detection Logic (Feature 14)
+        // Conflict Detection
         let conflictWarning = false;
-        
         if (data.dateObj) {
             const newTime = new Date(data.dateObj).getTime();
-            
-            // Check against existing tasks (look for overlap within 30 mins)
             conflictWarning = state.schedule.some(t => {
                 if (!t.dateObj) return false;
-                const existingTime = new Date(t.dateObj).getTime();
-                const diff = Math.abs(newTime - existingTime);
-                return diff < 30 * 60000; // 30 minutes in milliseconds
+                const diff = Math.abs(newTime - new Date(t.dateObj).getTime());
+                return diff < 30 * 60000;
             });
             
-            if (conflictWarning) {
-                // Audio Warning
-                if ('speechSynthesis' in window) {
+            if (conflictWarning && 'speechSynthesis' in window) {
                    const utterance = new SpeechSynthesisUtterance("Warning. Schedule conflict detected.");
                    window.speechSynthesis.speak(utterance);
-                }
             }
         }
 
-        // 3. Construct the new item
         const newItem = { 
             id: Date.now(), 
             text: data.text, 
-            type: conflictWarning ? "conflict" : (data.type || "task"), // Mark as conflict if needed
+            type: conflictWarning ? "conflict" : (data.type || "task"), 
             time: data.time || "TBD",
             dateObj: data.dateObj,
             notified: false 
         };
 
-        // 4. Add & Sort the Schedule
+        // Create Log Entry
+        const newLog = {
+            id: Date.now() + 1,
+            timestamp: new Date().toLocaleTimeString(),
+            message: conflictWarning 
+                ? `CONFLICT: ${data.text} overlaps with existing protocol.`
+                : `Protocol created: ${data.text}`,
+            type: conflictWarning ? 'warning' : 'info'
+        };
+
         const newSchedule = [...state.schedule, newItem].sort((a, b) => {
-            // Put TBDs at the bottom
             if (!a.dateObj && !b.dateObj) return 0;
             if (!a.dateObj) return 1;
             if (!b.dateObj) return -1;
-            // Sort by earliest date/time
             return new Date(a.dateObj) - new Date(b.dateObj);
         });
 
-        return { schedule: newSchedule };
+        return { 
+            schedule: newSchedule,
+            logs: [newLog, ...state.logs].slice(0, 50) 
+        };
       }),
 
-      removeTask: (id) => set((state) => ({
-        schedule: state.schedule.filter(t => t.id !== id)
-      })),
+      removeTask: (id) => set((state) => {
+        const task = state.schedule.find(t => t.id === id);
+        const newLog = {
+            id: Date.now(),
+            timestamp: new Date().toLocaleTimeString(),
+            message: `Protocol "${task ? task.text : id}" deleted by override.`,
+            type: 'error'
+        };
+
+        return {
+            schedule: state.schedule.filter(t => t.id !== id),
+            logs: [newLog, ...state.logs].slice(0, 50)
+        };
+      }),
 
     }),
     {
-      name: 'jarvis-storage', // Saves to LocalStorage
+      name: 'jarvis-storage', 
     }
   )
 );
