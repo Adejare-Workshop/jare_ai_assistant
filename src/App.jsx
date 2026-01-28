@@ -3,29 +3,31 @@ import { useStore } from './store/useStore';
 import { useScheduler } from './hooks/useScheduler'; 
 import { useProactive } from './hooks/useProactive';
 import { useVoiceInput } from './hooks/useVoiceInput';
-import { useConnectivity } from './hooks/useConnectivity'; // Feature 22
+import { useConnectivity } from './hooks/useConnectivity';
 import DailyBriefing from './components/DailyBriefing';
 import ProfilePanel from './components/ProfilePanel';
 import SystemLogs from './components/SystemLogs';
+import PriorityMatrix from './components/PriorityMatrix'; // Feature 15 Import
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, Send, Trash2, Activity, Disc, Brain, User, AlertTriangle, Terminal, Check, X, Wifi, WifiOff, MessageSquare } from 'lucide-react';
+import { Mic, Send, Trash2, Activity, Disc, Brain, User, AlertTriangle, Terminal, Check, X, Wifi, WifiOff, MessageSquare, LayoutGrid } from 'lucide-react';
 
 function App() {
   const { 
       schedule, suggestions, addTask, removeTask, 
       acceptSuggestion, rejectSuggestion,
       status, setStatus, setAnalysisMode,
-      personality, togglePersonality // Feature 20
+      personality, togglePersonality
   } = useStore();
   
   const [input, setInput] = useState("");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isLogsOpen, setIsLogsOpen] = useState(false);
+  const [isMatrixOpen, setIsMatrixOpen] = useState(false); // Feature 15 State
 
   // --- BACKGROUND SYSTEMS ---
   useScheduler(); 
   useProactive();
-  const isOnline = useConnectivity(); // Feature 22 Check
+  const isOnline = useConnectivity();
 
   // --- VOICE LOGIC ---
   const handleVoiceEnd = () => {};
@@ -41,7 +43,6 @@ function App() {
 
     setStatus("processing");
     
-    // Simulate personality-based latency
     const delay = personality === 'deep' ? 1200 : 600;
 
     setTimeout(() => {
@@ -66,23 +67,30 @@ function App() {
       <AnimatePresence>
         {isLogsOpen && <SystemLogs isOpen={isLogsOpen} onClose={() => setIsLogsOpen(false)} />}
       </AnimatePresence>
+      <AnimatePresence>
+        {isMatrixOpen && <PriorityMatrix isOpen={isMatrixOpen} onClose={() => setIsMatrixOpen(false)} />}
+      </AnimatePresence>
+      
       <DailyBriefing />
 
       {/* --- HEADER --- */}
       <header className="flex justify-between items-center py-6 border-b border-gray-900 mb-8 sticky top-0 bg-jarvis-bg/90 backdrop-blur-sm z-10">
         <div className="flex items-center gap-2">
-            {/* Offline Status Dot */}
             <div className={`w-2 h-2 rounded-full ${!isOnline ? 'bg-jarvis-red' : status === 'processing' ? 'bg-jarvis-red animate-ping' : 'bg-jarvis-cyan'}`}></div>
             <h1 className="text-xl font-bold tracking-[0.2em] text-jarvis-cyan">JARVIS.OS</h1>
         </div>
         
         <div className="flex items-center gap-3">
-            {/* Feature 20: Personality Toggle */}
+            {/* Feature 15: Matrix Toggle */}
             <button 
-                onClick={togglePersonality}
-                className={`p-2 border rounded-full transition-colors ${personality === 'deep' ? 'border-jarvis-cyan text-jarvis-cyan bg-jarvis-cyan/10' : 'border-gray-800 text-gray-500 hover:text-white'}`}
-                title={`Mode: ${personality.toUpperCase()}`}
+                onClick={() => setIsMatrixOpen(true)}
+                className="p-2 border border-gray-800 rounded-full hover:border-jarvis-cyan hover:text-jarvis-cyan transition-colors text-gray-500"
+                title="Tactical Mode"
             >
+                <LayoutGrid className="w-4 h-4" />
+            </button>
+
+            <button onClick={togglePersonality} className={`p-2 border rounded-full transition-colors ${personality === 'deep' ? 'border-jarvis-cyan text-jarvis-cyan bg-jarvis-cyan/10' : 'border-gray-800 text-gray-500 hover:text-white'}`}>
                 <MessageSquare className="w-4 h-4" />
             </button>
 
@@ -93,10 +101,8 @@ function App() {
                 <User className="w-4 h-4" />
             </button>
             
-            {/* Feature 22: Connectivity Badge */}
             <div className={`hidden md:flex items-center gap-2 text-xs border px-3 py-1 rounded-full transition-colors ${!isOnline ? 'border-jarvis-red text-jarvis-red bg-jarvis-red/10' : 'border-gray-800 text-gray-500'}`}>
                 {!isOnline ? <WifiOff className="w-3 h-3" /> : <Wifi className="w-3 h-3" />}
-                <span>{!isOnline ? "OFFLINE" : "ONLINE"}</span>
             </div>
         </div>
       </header>
@@ -120,7 +126,7 @@ function App() {
           <div className="text-center text-gray-600 mt-10 tracking-widest text-xs">NO ACTIVE PROTOCOLS</div>
         )}
 
-        {/* 1. GHOST TASKS (Feature 10) */}
+        {/* GHOST TASKS */}
         <AnimatePresence>
             {suggestions.map((item) => (
                 <motion.div
@@ -146,7 +152,7 @@ function App() {
             ))}
         </AnimatePresence>
 
-        {/* 2. REAL TASKS */}
+        {/* REAL TASKS */}
         <AnimatePresence>
           {schedule.map((item) => (
             <motion.div
@@ -161,11 +167,18 @@ function App() {
                <div className="text-xs text-gray-500 mb-1 flex items-center gap-2">
                    {item.time || "PENDING"} // {item.type?.toUpperCase()}
                    {item.type === 'conflict' && <AlertTriangle className="w-3 h-3 text-jarvis-red animate-pulse"/>}
+                   
+                   {/* Priority Indicators */}
+                   {item.isUrgent && <span className="text-[10px] bg-jarvis-red/20 text-jarvis-red px-1 rounded">URGENT</span>}
+                   {item.isImportant && <span className="text-[10px] bg-yellow-500/20 text-yellow-500 px-1 rounded">CRITICAL</span>}
                </div>
+               
                <div className={`text-sm font-bold ${item.type === 'conflict' ? 'text-jarvis-red' : 'text-gray-200'}`}>
                    {item.text}
                </div>
+               
                {item.type === 'conflict' && (<div className="text-[10px] text-jarvis-red mt-1 font-mono uppercase tracking-wider">Warning: Schedule Overlap Detected</div>)}
+              
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button onClick={() => removeTask(item.id)} className="text-gray-600 hover:text-jarvis-red transition-colors"><Trash2 className="w-4 h-4" /></button>
               </div>
