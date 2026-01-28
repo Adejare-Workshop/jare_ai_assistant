@@ -5,11 +5,13 @@ import { parseCommand } from '../utils/nlp';
 export const useStore = create(
   persist(
     (set, get) => ({
-      // --- IDENTITY CORE ---
+      // --- IDENTITY CORE (Now with XP) ---
       user: { 
         name: "Commander",
         sleepGoal: 8,
-        focusBlock: 45
+        focusBlock: 45,
+        xp: 0,     // Feature 7
+        level: 1   // Feature 7
       },
       
       // --- OPERATIONAL DATA ---
@@ -19,7 +21,7 @@ export const useStore = create(
       logs: [],
       personality: 'brief', 
 
-      // --- FOCUS PROTOCOL STATE (Feature 11) ---
+      // --- FOCUS PROTOCOL STATE ---
       isFocusMode: false,
       activeTaskId: null,
 
@@ -39,7 +41,43 @@ export const useStore = create(
 
       setStatus: (status) => set({ status }),
 
-      // Focus Mode Actions
+      // --- GAMIFICATION ACTIONS (Feature 7) ---
+      addXp: (amount) => set((state) => {
+        const newXp = state.user.xp + amount;
+        const newLevel = Math.floor(newXp / 100) + 1; // Level up every 100 XP
+        
+        let logMsg = `Gained ${amount} XP.`;
+        if (newLevel > state.user.level) {
+            logMsg = `LEVEL UP! Promotion to Level ${newLevel}.`;
+        }
+
+        const newLog = {
+            id: Date.now(),
+            timestamp: new Date().toLocaleTimeString(),
+            message: logMsg,
+            type: 'success'
+        };
+
+        return {
+            user: { ...state.user, xp: newXp, level: newLevel },
+            logs: [newLog, ...state.logs].slice(0, 50)
+        };
+      }),
+
+      completeTask: (id) => {
+        const state = get();
+        const task = state.schedule.find(t => t.id === id);
+        
+        // Calculate XP based on difficulty
+        let xpGain = 10; // Base XP
+        if (task?.isUrgent) xpGain += 5;
+        if (task?.isImportant) xpGain += 10;
+
+        get().addXp(xpGain); // Award XP
+        get().removeTask(id); // Remove task
+      },
+
+      // --- FOCUS MODE ACTIONS ---
       enterFocusMode: (taskId) => set((state) => {
         const task = state.schedule.find(t => t.id === taskId);
         const newLog = {
@@ -55,31 +93,30 @@ export const useStore = create(
         };
       }),
 
-      exitFocusMode: (completed = false) => set((state) => {
-        let newSchedule = state.schedule;
+      exitFocusMode: (completed = false) => {
+        const state = get();
         
-        // If completed, remove the task
         if (completed && state.activeTaskId) {
-            newSchedule = state.schedule.filter(t => t.id !== state.activeTaskId);
+            get().completeTask(state.activeTaskId); // Use new complete action
         }
 
         const newLog = {
             id: Date.now(),
             timestamp: new Date().toLocaleTimeString(),
             message: completed 
-                ? "Objective complete. Focus Protocol disengaged." 
-                : "Focus Protocol aborted by user.",
+                ? "Objective complete. XP Awarded." 
+                : "Focus Protocol aborted.",
             type: completed ? 'success' : 'error'
         };
 
-        return {
+        set((state) => ({
             isFocusMode: false,
             activeTaskId: null,
-            schedule: newSchedule,
             logs: [newLog, ...state.logs].slice(0, 50)
-        };
-      }),
+        }));
+      },
 
+      // --- PERSONALITY ACTIONS ---
       togglePersonality: () => set((state) => {
         const newMode = state.personality === 'brief' ? 'deep' : 'brief';
         const newLog = {
@@ -164,6 +201,7 @@ export const useStore = create(
         )
       })),
 
+      // --- SUGGESTION ACTIONS ---
       addSuggestion: (text, time) => set((state) => {
         const exists = state.schedule.find(t => t.text === text) || 
                        state.suggestions.find(s => s.text === text);
@@ -210,6 +248,7 @@ export const useStore = create(
         suggestions: state.suggestions.filter(s => s.id !== id)
       })),
 
+      // --- TASK ACTIONS ---
       addTask: (input) => set((state) => {
         const data = parseCommand(input);
         
