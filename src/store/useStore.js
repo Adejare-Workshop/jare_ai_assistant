@@ -14,9 +14,8 @@ export const useStore = create(
       
       // --- OPERATIONAL DATA ---
       schedule: [],
-      status: "idle", // 'idle', 'listening', 'processing'
-      
-      // --- SYSTEM LOGS (Feature 25) ---
+      suggestions: [], // NEW: Ghost Tasks
+      status: "idle", 
       logs: [],
 
       // --- ANALYSIS MODE STATE ---
@@ -35,12 +34,11 @@ export const useStore = create(
 
       setStatus: (status) => set({ status }),
 
-      // Update User & Log it
       updateUser: (userData) => set((state) => {
         const newLog = {
             id: Date.now(),
             timestamp: new Date().toLocaleTimeString(),
-            message: `User profile updated: ${Object.keys(userData).join(", ")}`,
+            message: `User profile updated`,
             type: 'success'
         };
         return { 
@@ -61,7 +59,6 @@ export const useStore = create(
         const nextIndex = state.currentQuestionIndex + 1;
         const isFinished = nextIndex >= state.questions.length;
 
-        // If finished, add a review task
         let newSchedule = state.schedule;
         let logMsg = null;
 
@@ -105,10 +102,56 @@ export const useStore = create(
         )
       })),
 
+      // --- SUGGESTION LOGIC (Feature 10) ---
+      addSuggestion: (text, time) => set((state) => {
+        // Avoid duplicates
+        const exists = state.schedule.find(t => t.text === text) || 
+                       state.suggestions.find(s => s.text === text);
+        if (exists) return {};
+
+        const newSuggestion = {
+            id: Date.now(),
+            text,
+            time,
+            type: 'suggestion',
+            dateObj: new Date()
+        };
+        return { suggestions: [...state.suggestions, newSuggestion] };
+      }),
+
+      acceptSuggestion: (id) => set((state) => {
+        const suggestion = state.suggestions.find(s => s.id === id);
+        if (!suggestion) return {};
+
+        const newTask = { 
+            ...suggestion, 
+            id: Date.now(), 
+            type: 'task',
+            notified: false 
+        };
+
+        const newLog = {
+            id: Date.now(),
+            timestamp: new Date().toLocaleTimeString(),
+            message: `Suggestion accepted: ${suggestion.text}`,
+            type: 'success'
+        };
+
+        return {
+            schedule: [...state.schedule, newTask].sort((a, b) => new Date(a.dateObj) - new Date(b.dateObj)),
+            suggestions: state.suggestions.filter(s => s.id !== id),
+            logs: [newLog, ...state.logs].slice(0, 50)
+        };
+      }),
+
+      rejectSuggestion: (id) => set((state) => ({
+        suggestions: state.suggestions.filter(s => s.id !== id)
+      })),
+      // -------------------------------------
+
       addTask: (input) => set((state) => {
         const data = parseCommand(input);
         
-        // Conflict Detection
         let conflictWarning = false;
         if (data.dateObj) {
             const newTime = new Date(data.dateObj).getTime();
@@ -133,12 +176,11 @@ export const useStore = create(
             notified: false 
         };
 
-        // Create Log Entry
         const newLog = {
             id: Date.now() + 1,
             timestamp: new Date().toLocaleTimeString(),
             message: conflictWarning 
-                ? `CONFLICT: ${data.text} overlaps with existing protocol.`
+                ? `CONFLICT: ${data.text} overlaps existing protocol.`
                 : `Protocol created: ${data.text}`,
             type: conflictWarning ? 'warning' : 'info'
         };
@@ -161,7 +203,7 @@ export const useStore = create(
         const newLog = {
             id: Date.now(),
             timestamp: new Date().toLocaleTimeString(),
-            message: `Protocol "${task ? task.text : id}" deleted by override.`,
+            message: `Protocol "${task ? task.text : id}" deleted.`,
             type: 'error'
         };
 
