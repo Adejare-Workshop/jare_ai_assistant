@@ -4,18 +4,19 @@ import { useScheduler } from './hooks/useScheduler';
 import { useProactive } from './hooks/useProactive';
 import { useVoiceInput } from './hooks/useVoiceInput';
 import { useConnectivity } from './hooks/useConnectivity';
-import { useSound } from './hooks/useSound'; // Feature 19
+import { useSound } from './hooks/useSound'; 
 import DailyBriefing from './components/DailyBriefing';
 import ProfilePanel from './components/ProfilePanel';
 import SystemLogs from './components/SystemLogs';
 import PriorityMatrix from './components/PriorityMatrix';
 import FocusOverlay from './components/FocusOverlay';
+import SettingsPanel from './components/SettingsPanel'; // Feature 26
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, Send, Trash2, Activity, Disc, Brain, User, AlertTriangle, Terminal, Check, X, Wifi, WifiOff, MessageSquare, LayoutGrid, Crosshair, Star } from 'lucide-react';
+import { Mic, Send, Trash2, Activity, Disc, Brain, User, AlertTriangle, Terminal, Check, X, Wifi, WifiOff, MessageSquare, LayoutGrid, Crosshair, Star, Settings } from 'lucide-react';
 
 function App() {
   const { 
-      user, schedule, suggestions, addTask, removeTask, completeTask, // completeTask added
+      user, schedule, suggestions, addTask, removeTask, completeTask,
       acceptSuggestion, rejectSuggestion,
       status, setStatus, setAnalysisMode,
       personality, togglePersonality,
@@ -23,17 +24,19 @@ function App() {
   } = useStore();
   
   const [input, setInput] = useState("");
+  // UI States
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isLogsOpen, setIsLogsOpen] = useState(false);
   const [isMatrixOpen, setIsMatrixOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false); // Feature 26 State
 
-  // --- BACKGROUND SYSTEMS ---
+  // SYSTEMS
   useScheduler(); 
   useProactive();
   const isOnline = useConnectivity();
-  const { playHover, playClick, playSuccess, playError } = useSound(); // Feature 19 Sound
+  const { playHover, playClick, playSuccess, playError } = useSound();
 
-  // --- VOICE LOGIC ---
+  // VOICE LOGIC
   const handleVoiceEnd = () => {};
   const { isListening, transcript, startListening, stopListening } = useVoiceInput(handleVoiceEnd);
 
@@ -45,7 +48,7 @@ function App() {
     if (e) e.preventDefault();
     if (!input.trim()) return;
 
-    playClick(); // Sound
+    playClick();
     setStatus("processing");
     
     const delay = personality === 'deep' ? 1200 : 600;
@@ -54,17 +57,16 @@ function App() {
       if (input.toLowerCase().includes("delete")) {
         const lastTask = schedule[schedule.length - 1];
         if (lastTask) removeTask(lastTask.id);
-        playError(); // Sound
+        playError();
       } else {
         addTask(input);
-        playSuccess(); // Sound
+        playSuccess();
       }
       setStatus("idle");
       setInput("");
     }, delay);
   };
 
-  // Helper wrapper for sounds
   const withSound = (action) => () => {
     playClick();
     action();
@@ -84,6 +86,9 @@ function App() {
       <AnimatePresence>
         {isMatrixOpen && <PriorityMatrix isOpen={isMatrixOpen} onClose={() => setIsMatrixOpen(false)} />}
       </AnimatePresence>
+      <AnimatePresence>
+        {isSettingsOpen && <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />}
+      </AnimatePresence>
       <DailyBriefing />
 
       {/* --- HEADER --- */}
@@ -93,7 +98,7 @@ function App() {
                 <div className={`w-2 h-2 rounded-full ${!isOnline ? 'bg-jarvis-red' : status === 'processing' ? 'bg-jarvis-red animate-ping' : 'bg-jarvis-cyan'}`}></div>
                 <h1 className="text-xl font-bold tracking-[0.2em] text-jarvis-cyan">JARVIS.OS</h1>
             </div>
-            {/* FEATURE 7: LEVEL INDICATOR */}
+            {/* LEVEL INDICATOR */}
             <div className="flex items-center gap-2 mt-1 opacity-50 text-[10px]">
                 <Star className="w-3 h-3 text-yellow-500" />
                 <span>LVL {user.level}</span>
@@ -104,6 +109,10 @@ function App() {
         </div>
         
         <div className="flex items-center gap-3">
+            <button onMouseEnter={playHover} onClick={withSound(() => setIsSettingsOpen(true))} className="p-2 border border-gray-800 rounded-full hover:border-white hover:text-white transition-colors text-gray-500" title="System Core">
+                <Settings className="w-4 h-4" />
+            </button>
+
             <button onMouseEnter={playHover} onClick={withSound(() => setIsMatrixOpen(true))} className="p-2 border border-gray-800 rounded-full hover:border-jarvis-cyan hover:text-jarvis-cyan transition-colors text-gray-500" title="Tactical Mode">
                 <LayoutGrid className="w-4 h-4" />
             </button>
@@ -118,10 +127,6 @@ function App() {
             <button onMouseEnter={playHover} onClick={withSound(() => setIsProfileOpen(true))} className="p-2 border border-gray-800 rounded-full hover:border-gray-500 transition-colors text-gray-500 hover:text-white">
                 <User className="w-4 h-4" />
             </button>
-            
-            <div className={`hidden md:flex items-center gap-2 text-xs border px-3 py-1 rounded-full transition-colors ${!isOnline ? 'border-jarvis-red text-jarvis-red bg-jarvis-red/10' : 'border-gray-800 text-gray-500'}`}>
-                {!isOnline ? <WifiOff className="w-3 h-3" /> : <Wifi className="w-3 h-3" />}
-            </div>
         </div>
       </header>
 
@@ -191,8 +196,6 @@ function App() {
                <div className={`text-sm font-bold ${item.type === 'conflict' ? 'text-jarvis-red' : 'text-gray-200'}`}>
                    {item.text}
                </div>
-               
-               {item.type === 'conflict' && (<div className="text-[10px] text-jarvis-red mt-1 font-mono uppercase tracking-wider">Warning: Schedule Overlap Detected</div>)}
               
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 {/* QUICK COMPLETE */}
