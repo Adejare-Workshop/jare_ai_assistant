@@ -1,25 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from './store/useStore';
 import { useScheduler } from './hooks/useScheduler'; 
+import { useProactive } from './hooks/useProactive'; // Feature 10 Import
 import { useVoiceInput } from './hooks/useVoiceInput';
 import DailyBriefing from './components/DailyBriefing';
 import ProfilePanel from './components/ProfilePanel';
-import SystemLogs from './components/SystemLogs'; // Feature 25 Import
+import SystemLogs from './components/SystemLogs';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, Send, Trash2, Activity, Disc, Brain, User, AlertTriangle, Terminal } from 'lucide-react';
+import { Mic, Send, Trash2, Activity, Disc, Brain, User, AlertTriangle, Terminal, Check, X } from 'lucide-react';
 
 function App() {
-  const { schedule, addTask, removeTask, status, setStatus, setAnalysisMode } = useStore();
-  const [input, setInput] = useState("");
+  const { 
+      schedule, suggestions, addTask, removeTask, 
+      acceptSuggestion, rejectSuggestion,
+      status, setStatus, setAnalysisMode 
+  } = useStore();
   
-  // UI Toggles
+  const [input, setInput] = useState("");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isLogsOpen, setIsLogsOpen] = useState(false);
 
-  // Background Systems
+  // --- BACKGROUND SYSTEMS ---
   useScheduler(); 
+  useProactive(); // Feature 10: Activates the Suggestion Engine
 
-  // Voice Logic
+  // --- VOICE LOGIC ---
   const handleVoiceEnd = () => {};
   const { isListening, transcript, startListening, stopListening } = useVoiceInput(handleVoiceEnd);
 
@@ -67,32 +72,15 @@ function App() {
         </div>
         
         <div className="flex items-center gap-3">
-            {/* Terminal Toggle */}
-            <button 
-                onClick={() => setIsLogsOpen(!isLogsOpen)}
-                className={`p-2 border rounded-full transition-colors ${isLogsOpen ? 'border-jarvis-cyan text-jarvis-cyan bg-jarvis-cyan/10' : 'border-gray-800 text-gray-500 hover:text-white'}`}
-                title="System Logs"
-            >
+            <button onClick={() => setIsLogsOpen(!isLogsOpen)} className={`p-2 border rounded-full transition-colors ${isLogsOpen ? 'border-jarvis-cyan text-jarvis-cyan bg-jarvis-cyan/10' : 'border-gray-800 text-gray-500 hover:text-white'}`}>
                 <Terminal className="w-4 h-4" />
             </button>
-
-            {/* Profile Toggle */}
-            <button 
-                onClick={() => setIsProfileOpen(true)}
-                className="p-2 border border-gray-800 rounded-full hover:border-gray-500 transition-colors text-gray-500 hover:text-white"
-            >
+            <button onClick={() => setIsProfileOpen(true)} className="p-2 border border-gray-800 rounded-full hover:border-gray-500 transition-colors text-gray-500 hover:text-white">
                 <User className="w-4 h-4" />
             </button>
-
-            {/* Analysis Trigger */}
-            <button 
-                onClick={() => setAnalysisMode(true)}
-                className="p-2 border border-gray-800 rounded-full hover:border-jarvis-cyan hover:bg-jarvis-cyan/10 transition-colors text-gray-500 hover:text-jarvis-cyan"
-            >
+            <button onClick={() => setAnalysisMode(true)} className="p-2 border border-gray-800 rounded-full hover:border-jarvis-cyan hover:bg-jarvis-cyan/10 transition-colors text-gray-500 hover:text-jarvis-cyan">
                 <Brain className="w-4 h-4" />
             </button>
-
-            {/* Status Pill */}
             <div className="flex items-center gap-2 text-xs text-gray-500 border border-gray-800 px-3 py-1 rounded-full">
                 <Activity className={`w-3 h-3 ${status === 'processing' ? 'animate-spin text-jarvis-cyan' : ''}`} />
                 <span>{status.toUpperCase()}</span>
@@ -112,10 +100,50 @@ function App() {
 
       {/* --- TIMELINE --- */}
       <div className="flex-1 space-y-4">
-        {schedule.length === 0 && (
+        {schedule.length === 0 && suggestions.length === 0 && (
           <div className="text-center text-gray-600 mt-10 tracking-widest text-xs">NO ACTIVE PROTOCOLS</div>
         )}
 
+        {/* 1. GHOST TASKS (SUGGESTIONS) */}
+        <AnimatePresence>
+            {suggestions.map((item) => (
+                <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="relative bg-jarvis-bg border border-dashed border-jarvis-cyan/50 p-4 rounded-md flex justify-between items-center"
+                >
+                    <div>
+                        <div className="text-[10px] text-jarvis-cyan mb-1 animate-pulse tracking-widest">
+                            SUGGESTION // {item.time}
+                        </div>
+                        <div className="text-sm font-bold text-gray-400 italic">
+                            {item.text}
+                        </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={() => acceptSuggestion(item.id)}
+                            className="p-2 bg-jarvis-cyan/10 hover:bg-jarvis-cyan text-jarvis-cyan hover:text-black rounded transition-colors"
+                            title="Accept"
+                        >
+                            <Check className="w-4 h-4" />
+                        </button>
+                        <button 
+                            onClick={() => rejectSuggestion(item.id)}
+                            className="p-2 hover:bg-jarvis-red/20 text-gray-500 hover:text-jarvis-red rounded transition-colors"
+                            title="Reject"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                </motion.div>
+            ))}
+        </AnimatePresence>
+
+        {/* 2. REAL TASKS */}
         <AnimatePresence>
           {schedule.map((item) => (
             <motion.div
