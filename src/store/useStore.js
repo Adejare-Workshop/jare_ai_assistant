@@ -17,9 +17,11 @@ export const useStore = create(
       suggestions: [], 
       status: "idle", 
       logs: [],
-      
-      // --- PERSONALITY CORE ---
       personality: 'brief', 
+
+      // --- FOCUS PROTOCOL STATE (Feature 11) ---
+      isFocusMode: false,
+      activeTaskId: null,
 
       // --- ANALYSIS MODE STATE ---
       isAnalysisMode: false,
@@ -36,6 +38,47 @@ export const useStore = create(
       // --- ACTIONS ---
 
       setStatus: (status) => set({ status }),
+
+      // Focus Mode Actions
+      enterFocusMode: (taskId) => set((state) => {
+        const task = state.schedule.find(t => t.id === taskId);
+        const newLog = {
+            id: Date.now(),
+            timestamp: new Date().toLocaleTimeString(),
+            message: `Focus Protocol initiated for: ${task ? task.text : 'Unknown'}`,
+            type: 'warning'
+        };
+        return {
+            isFocusMode: true,
+            activeTaskId: taskId,
+            logs: [newLog, ...state.logs].slice(0, 50)
+        };
+      }),
+
+      exitFocusMode: (completed = false) => set((state) => {
+        let newSchedule = state.schedule;
+        
+        // If completed, remove the task
+        if (completed && state.activeTaskId) {
+            newSchedule = state.schedule.filter(t => t.id !== state.activeTaskId);
+        }
+
+        const newLog = {
+            id: Date.now(),
+            timestamp: new Date().toLocaleTimeString(),
+            message: completed 
+                ? "Objective complete. Focus Protocol disengaged." 
+                : "Focus Protocol aborted by user.",
+            type: completed ? 'success' : 'error'
+        };
+
+        return {
+            isFocusMode: false,
+            activeTaskId: null,
+            schedule: newSchedule,
+            logs: [newLog, ...state.logs].slice(0, 50)
+        };
+      }),
 
       togglePersonality: () => set((state) => {
         const newMode = state.personality === 'brief' ? 'deep' : 'brief';
@@ -121,7 +164,6 @@ export const useStore = create(
         )
       })),
 
-      // --- SUGGESTION LOGIC ---
       addSuggestion: (text, time) => set((state) => {
         const exists = state.schedule.find(t => t.text === text) || 
                        state.suggestions.find(s => s.text === text);
@@ -168,18 +210,13 @@ export const useStore = create(
         suggestions: state.suggestions.filter(s => s.id !== id)
       })),
 
-      // --- MAIN TASK LOGIC (UPDATED WITH PRIORITY) ---
       addTask: (input) => set((state) => {
         const data = parseCommand(input);
         
-        // 1. PRIORITY DETECTION
         const textLower = data.text.toLowerCase();
-        // Urgent keywords
         const isUrgent = textLower.includes("now") || textLower.includes("asap") || textLower.includes("urgent") || textLower.includes("today") || data.time === "NOW";
-        // Important keywords
         const isImportant = textLower.includes("critical") || textLower.includes("boss") || textLower.includes("deadline") || textLower.includes("project") || textLower.includes("meeting");
 
-        // 2. CONFLICT DETECTION
         let conflictWarning = false;
         if (data.dateObj) {
             const newTime = new Date(data.dateObj).getTime();
@@ -202,7 +239,6 @@ export const useStore = create(
             time: data.time || "TBD",
             dateObj: data.dateObj,
             notified: false,
-            // NEW FIELDS
             isUrgent,
             isImportant
         };
