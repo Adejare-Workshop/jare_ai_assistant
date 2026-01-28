@@ -1,25 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from './store/useStore';
-import { useScheduler } from './hooks/useScheduler'; // Background Alarm System
+import { useScheduler } from './hooks/useScheduler'; 
 import { useVoiceInput } from './hooks/useVoiceInput';
 import DailyBriefing from './components/DailyBriefing';
 import ProfilePanel from './components/ProfilePanel';
+import SystemLogs from './components/SystemLogs'; // Feature 25 Import
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, Send, Trash2, Activity, Disc, Brain, User, AlertTriangle } from 'lucide-react';
+import { Mic, Send, Trash2, Activity, Disc, Brain, User, AlertTriangle, Terminal } from 'lucide-react';
 
 function App() {
   const { schedule, addTask, removeTask, status, setStatus, setAnalysisMode } = useStore();
   const [input, setInput] = useState("");
+  
+  // UI Toggles
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isLogsOpen, setIsLogsOpen] = useState(false);
 
-  // --- ACTIVATE THE BACKGROUND BRAIN ---
-  // This runs every 30 seconds to check for alarms
+  // Background Systems
   useScheduler(); 
 
-  // --- VOICE LOGIC ---
-  const handleVoiceEnd = () => {
-    // Optional: Auto-submit voice commands here
-  };
+  // Voice Logic
+  const handleVoiceEnd = () => {};
   const { isListening, transcript, startListening, stopListening } = useVoiceInput(handleVoiceEnd);
 
   useEffect(() => {
@@ -47,13 +48,18 @@ function App() {
   return (
     <div className="min-h-screen bg-jarvis-bg text-jarvis-text p-4 pb-32 max-w-lg mx-auto flex flex-col font-mono selection:bg-jarvis-cyan selection:text-black relative overflow-hidden">
       
-      {/* OVERLAYS */}
+      {/* --- OVERLAYS --- */}
       <AnimatePresence>
         {isProfileOpen && <ProfilePanel isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />}
       </AnimatePresence>
+      
+      <AnimatePresence>
+        {isLogsOpen && <SystemLogs isOpen={isLogsOpen} onClose={() => setIsLogsOpen(false)} />}
+      </AnimatePresence>
+
       <DailyBriefing />
 
-      {/* HEADER */}
+      {/* --- HEADER --- */}
       <header className="flex justify-between items-center py-6 border-b border-gray-900 mb-8 sticky top-0 bg-jarvis-bg/90 backdrop-blur-sm z-10">
         <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${status === 'processing' ? 'bg-jarvis-red animate-ping' : 'bg-jarvis-cyan'}`}></div>
@@ -61,12 +67,32 @@ function App() {
         </div>
         
         <div className="flex items-center gap-3">
-            <button onClick={() => setIsProfileOpen(true)} className="p-2 border border-gray-800 rounded-full hover:border-gray-500 transition-colors text-gray-500 hover:text-white">
+            {/* Terminal Toggle */}
+            <button 
+                onClick={() => setIsLogsOpen(!isLogsOpen)}
+                className={`p-2 border rounded-full transition-colors ${isLogsOpen ? 'border-jarvis-cyan text-jarvis-cyan bg-jarvis-cyan/10' : 'border-gray-800 text-gray-500 hover:text-white'}`}
+                title="System Logs"
+            >
+                <Terminal className="w-4 h-4" />
+            </button>
+
+            {/* Profile Toggle */}
+            <button 
+                onClick={() => setIsProfileOpen(true)}
+                className="p-2 border border-gray-800 rounded-full hover:border-gray-500 transition-colors text-gray-500 hover:text-white"
+            >
                 <User className="w-4 h-4" />
             </button>
-            <button onClick={() => setAnalysisMode(true)} className="p-2 border border-gray-800 rounded-full hover:border-jarvis-cyan hover:bg-jarvis-cyan/10 transition-colors text-gray-500 hover:text-jarvis-cyan">
+
+            {/* Analysis Trigger */}
+            <button 
+                onClick={() => setAnalysisMode(true)}
+                className="p-2 border border-gray-800 rounded-full hover:border-jarvis-cyan hover:bg-jarvis-cyan/10 transition-colors text-gray-500 hover:text-jarvis-cyan"
+            >
                 <Brain className="w-4 h-4" />
             </button>
+
+            {/* Status Pill */}
             <div className="flex items-center gap-2 text-xs text-gray-500 border border-gray-800 px-3 py-1 rounded-full">
                 <Activity className={`w-3 h-3 ${status === 'processing' ? 'animate-spin text-jarvis-cyan' : ''}`} />
                 <span>{status.toUpperCase()}</span>
@@ -74,7 +100,7 @@ function App() {
         </div>
       </header>
 
-      {/* VOICE ORB */}
+      {/* --- VOICE ORB --- */}
       <div className="flex justify-center mb-8 relative">
         <div className={`relative w-24 h-24 rounded-full border border-gray-800 flex items-center justify-center transition-all duration-300 
             ${isListening ? 'shadow-[0_0_80px_rgba(0,243,255,0.6)] border-jarvis-cyan scale-110' : ''}
@@ -84,7 +110,7 @@ function App() {
         </div>
       </div>
 
-      {/* TIMELINE */}
+      {/* --- TIMELINE --- */}
       <div className="flex-1 space-y-4">
         {schedule.length === 0 && (
           <div className="text-center text-gray-600 mt-10 tracking-widest text-xs">NO ACTIVE PROTOCOLS</div>
@@ -97,7 +123,6 @@ function App() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 50 }}
-              // --- CONDITIONAL STYLING FOR CONFLICTS ---
               className={`group relative bg-jarvis-panel border-l-2 p-4 pr-12 transition-all 
                 ${item.type === 'conflict' 
                     ? 'border-jarvis-red shadow-[0_0_15px_rgba(255,0,60,0.2)] bg-jarvis-red/5' 
@@ -129,7 +154,7 @@ function App() {
         </AnimatePresence>
       </div>
 
-      {/* INPUT CONSOLE */}
+      {/* --- INPUT CONSOLE --- */}
       <div className="fixed bottom-0 left-0 w-full bg-black/80 backdrop-blur-md border-t border-gray-900 p-4 z-30">
         <form onSubmit={handleCommand} className="max-w-lg mx-auto flex gap-3 items-center">
           <button 
@@ -142,9 +167,11 @@ function App() {
           >
             <Mic className="w-5 h-5" />
           </button>
+          
           <div className="flex-1 relative">
             <input type="text" value={input} onChange={(e) => setInput(e.target.value)} placeholder={isListening ? "Listening..." : "Awaiting command..."} className="w-full bg-transparent border-b border-gray-800 py-2 px-4 text-sm focus:outline-none focus:border-jarvis-cyan text-white placeholder-gray-700 font-mono" />
           </div>
+          
           <button type="submit" className="p-2 text-gray-500 hover:text-jarvis-cyan transition-colors">
             <Send className="w-5 h-5" />
           </button>
