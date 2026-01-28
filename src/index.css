@@ -7,6 +7,55 @@
 }
 
 body {
+  margin: 0;
+  /* Dark grey instead of pure black */
+  background-color: #050505; 
+  color: #e2e2e2;
+  font-family: 'Courier New', Courier, monospace;
+  overflow-x: hidden;
+  
+  /* THIS ADDS THE GRID PATTERN */
+  background-image: 
+    linear-gradient(rgba(0, 243, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 243, 255, 0.03) 1px, transparent 1px);
+  background-size: 30px 30px;
+}
+
+/* Adds a subtle blue glow to the center so it feels "active" */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: radial-gradient(circle at center, rgba(0, 243, 255, 0.05) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0a0a0a; 
+}
+::-webkit-scrollbar-thumb {
+  background: #333; 
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #00f3ff; 
+}@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
   background-color: #000000;
   color: #e2e2e2;
   font-family: 'Courier New', Courier, monospace; 
