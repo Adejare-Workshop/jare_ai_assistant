@@ -113,7 +113,8 @@ function App() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 50 }}
-              className="group relative bg-jarvis-panel border-l-2 border-gray-700 hover:border-jarvis-cyan p-4 pr-12 transition-all"
+              className={`group relative bg-jarvis-panel border-l-2 p-4 pr-12 transition-all 
+              ${item.type === 'conflict' ? 'conflict-task' : 'border-gray-700 hover:border-jarvis-cyan'}
             >
                <div className="text-xs text-gray-500 mb-1">{item.time || "PENDING"} // {item.type?.toUpperCase()}</div>
                <div className="text-sm font-bold text-gray-200">{item.text}</div>
