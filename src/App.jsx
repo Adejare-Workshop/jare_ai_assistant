@@ -4,21 +4,22 @@ import { useScheduler } from './hooks/useScheduler';
 import { useProactive } from './hooks/useProactive';
 import { useVoiceInput } from './hooks/useVoiceInput';
 import { useConnectivity } from './hooks/useConnectivity';
+import { useSound } from './hooks/useSound'; // Feature 19
 import DailyBriefing from './components/DailyBriefing';
 import ProfilePanel from './components/ProfilePanel';
 import SystemLogs from './components/SystemLogs';
 import PriorityMatrix from './components/PriorityMatrix';
-import FocusOverlay from './components/FocusOverlay'; // Feature 11 Import
+import FocusOverlay from './components/FocusOverlay';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, Send, Trash2, Activity, Disc, Brain, User, AlertTriangle, Terminal, Check, X, Wifi, WifiOff, MessageSquare, LayoutGrid, Crosshair } from 'lucide-react';
+import { Mic, Send, Trash2, Activity, Disc, Brain, User, AlertTriangle, Terminal, Check, X, Wifi, WifiOff, MessageSquare, LayoutGrid, Crosshair, Star } from 'lucide-react';
 
 function App() {
   const { 
-      schedule, suggestions, addTask, removeTask, 
+      user, schedule, suggestions, addTask, removeTask, completeTask, // completeTask added
       acceptSuggestion, rejectSuggestion,
       status, setStatus, setAnalysisMode,
       personality, togglePersonality,
-      enterFocusMode // Feature 11 Action
+      enterFocusMode 
   } = useStore();
   
   const [input, setInput] = useState("");
@@ -30,6 +31,7 @@ function App() {
   useScheduler(); 
   useProactive();
   const isOnline = useConnectivity();
+  const { playHover, playClick, playSuccess, playError } = useSound(); // Feature 19 Sound
 
   // --- VOICE LOGIC ---
   const handleVoiceEnd = () => {};
@@ -43,6 +45,7 @@ function App() {
     if (e) e.preventDefault();
     if (!input.trim()) return;
 
+    playClick(); // Sound
     setStatus("processing");
     
     const delay = personality === 'deep' ? 1200 : 600;
@@ -51,20 +54,27 @@ function App() {
       if (input.toLowerCase().includes("delete")) {
         const lastTask = schedule[schedule.length - 1];
         if (lastTask) removeTask(lastTask.id);
+        playError(); // Sound
       } else {
         addTask(input);
+        playSuccess(); // Sound
       }
       setStatus("idle");
       setInput("");
     }, delay);
   };
 
+  // Helper wrapper for sounds
+  const withSound = (action) => () => {
+    playClick();
+    action();
+  };
+
   return (
     <div className="min-h-screen bg-jarvis-bg text-jarvis-text p-4 pb-32 max-w-lg mx-auto flex flex-col font-mono selection:bg-jarvis-cyan selection:text-black relative overflow-hidden">
       
       {/* --- OVERLAYS --- */}
-      <FocusOverlay /> {/* Feature 11: Digital Blinders */}
-      
+      <FocusOverlay />
       <AnimatePresence>
         {isProfileOpen && <ProfilePanel isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />}
       </AnimatePresence>
@@ -74,33 +84,38 @@ function App() {
       <AnimatePresence>
         {isMatrixOpen && <PriorityMatrix isOpen={isMatrixOpen} onClose={() => setIsMatrixOpen(false)} />}
       </AnimatePresence>
-      
       <DailyBriefing />
 
       {/* --- HEADER --- */}
       <header className="flex justify-between items-center py-6 border-b border-gray-900 mb-8 sticky top-0 bg-jarvis-bg/90 backdrop-blur-sm z-10">
-        <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${!isOnline ? 'bg-jarvis-red' : status === 'processing' ? 'bg-jarvis-red animate-ping' : 'bg-jarvis-cyan'}`}></div>
-            <h1 className="text-xl font-bold tracking-[0.2em] text-jarvis-cyan">JARVIS.OS</h1>
+        <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${!isOnline ? 'bg-jarvis-red' : status === 'processing' ? 'bg-jarvis-red animate-ping' : 'bg-jarvis-cyan'}`}></div>
+                <h1 className="text-xl font-bold tracking-[0.2em] text-jarvis-cyan">JARVIS.OS</h1>
+            </div>
+            {/* FEATURE 7: LEVEL INDICATOR */}
+            <div className="flex items-center gap-2 mt-1 opacity-50 text-[10px]">
+                <Star className="w-3 h-3 text-yellow-500" />
+                <span>LVL {user.level}</span>
+                <div className="w-16 h-1 bg-gray-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-yellow-500 transition-all duration-500" style={{ width: `${user.xp % 100}%` }}></div>
+                </div>
+            </div>
         </div>
         
         <div className="flex items-center gap-3">
-            <button 
-                onClick={() => setIsMatrixOpen(true)}
-                className="p-2 border border-gray-800 rounded-full hover:border-jarvis-cyan hover:text-jarvis-cyan transition-colors text-gray-500"
-                title="Tactical Mode"
-            >
+            <button onMouseEnter={playHover} onClick={withSound(() => setIsMatrixOpen(true))} className="p-2 border border-gray-800 rounded-full hover:border-jarvis-cyan hover:text-jarvis-cyan transition-colors text-gray-500" title="Tactical Mode">
                 <LayoutGrid className="w-4 h-4" />
             </button>
 
-            <button onClick={togglePersonality} className={`p-2 border rounded-full transition-colors ${personality === 'deep' ? 'border-jarvis-cyan text-jarvis-cyan bg-jarvis-cyan/10' : 'border-gray-800 text-gray-500 hover:text-white'}`}>
+            <button onMouseEnter={playHover} onClick={withSound(togglePersonality)} className={`p-2 border rounded-full transition-colors ${personality === 'deep' ? 'border-jarvis-cyan text-jarvis-cyan bg-jarvis-cyan/10' : 'border-gray-800 text-gray-500 hover:text-white'}`}>
                 <MessageSquare className="w-4 h-4" />
             </button>
 
-            <button onClick={() => setIsLogsOpen(!isLogsOpen)} className={`p-2 border rounded-full transition-colors ${isLogsOpen ? 'border-jarvis-cyan text-jarvis-cyan bg-jarvis-cyan/10' : 'border-gray-800 text-gray-500 hover:text-white'}`}>
+            <button onMouseEnter={playHover} onClick={withSound(() => setIsLogsOpen(!isLogsOpen))} className={`p-2 border rounded-full transition-colors ${isLogsOpen ? 'border-jarvis-cyan text-jarvis-cyan bg-jarvis-cyan/10' : 'border-gray-800 text-gray-500 hover:text-white'}`}>
                 <Terminal className="w-4 h-4" />
             </button>
-            <button onClick={() => setIsProfileOpen(true)} className="p-2 border border-gray-800 rounded-full hover:border-gray-500 transition-colors text-gray-500 hover:text-white">
+            <button onMouseEnter={playHover} onClick={withSound(() => setIsProfileOpen(true))} className="p-2 border border-gray-800 rounded-full hover:border-gray-500 transition-colors text-gray-500 hover:text-white">
                 <User className="w-4 h-4" />
             </button>
             
@@ -148,8 +163,8 @@ function App() {
                         </div>
                     </div>
                     <div className="flex gap-2">
-                        <button onClick={() => acceptSuggestion(item.id)} className="p-2 bg-jarvis-cyan/10 hover:bg-jarvis-cyan text-jarvis-cyan hover:text-black rounded transition-colors"><Check className="w-4 h-4" /></button>
-                        <button onClick={() => rejectSuggestion(item.id)} className="p-2 hover:bg-jarvis-red/20 text-gray-500 hover:text-jarvis-red rounded transition-colors"><X className="w-4 h-4" /></button>
+                        <button onClick={withSound(() => acceptSuggestion(item.id))} className="p-2 bg-jarvis-cyan/10 hover:bg-jarvis-cyan text-jarvis-cyan hover:text-black rounded transition-colors"><Check className="w-4 h-4" /></button>
+                        <button onClick={withSound(() => rejectSuggestion(item.id))} className="p-2 hover:bg-jarvis-red/20 text-gray-500 hover:text-jarvis-red rounded transition-colors"><X className="w-4 h-4" /></button>
                     </div>
                 </motion.div>
             ))}
@@ -170,10 +185,7 @@ function App() {
                <div className="text-xs text-gray-500 mb-1 flex items-center gap-2">
                    {item.time || "PENDING"} // {item.type?.toUpperCase()}
                    {item.type === 'conflict' && <AlertTriangle className="w-3 h-3 text-jarvis-red animate-pulse"/>}
-                   
-                   {/* Priority Badges */}
                    {item.isUrgent && <span className="text-[10px] bg-jarvis-red/20 text-jarvis-red px-1 rounded">URGENT</span>}
-                   {item.isImportant && <span className="text-[10px] bg-yellow-500/20 text-yellow-500 px-1 rounded">CRITICAL</span>}
                </div>
                
                <div className={`text-sm font-bold ${item.type === 'conflict' ? 'text-jarvis-red' : 'text-gray-200'}`}>
@@ -183,11 +195,18 @@ function App() {
                {item.type === 'conflict' && (<div className="text-[10px] text-jarvis-red mt-1 font-mono uppercase tracking-wider">Warning: Schedule Overlap Detected</div>)}
               
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                {/* Feature 11: Focus Button */}
-                <button onClick={() => enterFocusMode(item.id)} className="text-gray-600 hover:text-jarvis-cyan transition-colors" title="Enter Focus Protocol">
+                {/* QUICK COMPLETE */}
+                <button 
+                    onClick={() => { playSuccess(); completeTask(item.id); }} 
+                    className="text-gray-600 hover:text-green-400 transition-colors" 
+                    title="Complete & Earn XP"
+                >
+                    <Check className="w-4 h-4" />
+                </button>
+                <button onClick={withSound(() => enterFocusMode(item.id))} className="text-gray-600 hover:text-jarvis-cyan transition-colors" title="Focus Mode">
                     <Crosshair className="w-4 h-4" />
                 </button>
-                <button onClick={() => removeTask(item.id)} className="text-gray-600 hover:text-jarvis-red transition-colors">
+                <button onClick={() => { playError(); removeTask(item.id); }} className="text-gray-600 hover:text-jarvis-red transition-colors" title="Delete">
                     <Trash2 className="w-4 h-4" />
                 </button>
               </div>
