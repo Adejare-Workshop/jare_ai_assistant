@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from './store/useStore';
 import { useVoiceInput } from './hooks/useVoiceInput';
-import DailyBriefing from './components/DailyBriefing'; // FEATURE 3 IMPORT
+import DailyBriefing from './components/DailyBriefing';
+import ProfilePanel from './components/ProfilePanel'; // FEATURE 4 IMPORT
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, Send, Trash2, Activity, Disc, Brain } from 'lucide-react'; // Added Brain icon
+import { Mic, Send, Trash2, Activity, Disc, Brain, User } from 'lucide-react'; // Added User icon
 
 function App() {
   const { schedule, addTask, removeTask, status, setStatus, setAnalysisMode } = useStore();
   const [input, setInput] = useState("");
+  const [isProfileOpen, setIsProfileOpen] = useState(false); // FEATURE 4 STATE
 
   // --- VOICE LOGIC START ---
   const handleVoiceEnd = () => {
@@ -40,9 +42,14 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-jarvis-bg text-jarvis-text p-4 pb-32 max-w-lg mx-auto flex flex-col font-mono selection:bg-jarvis-cyan selection:text-black relative">
+    <div className="min-h-screen bg-jarvis-bg text-jarvis-text p-4 pb-32 max-w-lg mx-auto flex flex-col font-mono selection:bg-jarvis-cyan selection:text-black relative overflow-hidden">
       
-      {/* FEATURE 3: THE OVERLAY COMPONENT */}
+      {/* FEATURE 4: PROFILE PANEL */}
+      <AnimatePresence>
+        {isProfileOpen && <ProfilePanel isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />}
+      </AnimatePresence>
+
+      {/* FEATURE 3: DAILY BRIEFING OVERLAY */}
       <DailyBriefing />
 
       {/* HEADER */}
@@ -53,7 +60,16 @@ function App() {
         </div>
         
         <div className="flex items-center gap-3">
-            {/* FEATURE 3 TRIGGER BUTTON */}
+            {/* PROFILE BUTTON */}
+            <button 
+                onClick={() => setIsProfileOpen(true)}
+                className="p-2 border border-gray-800 rounded-full hover:border-gray-500 transition-colors text-gray-500 hover:text-white"
+                title="Identity Core"
+            >
+                <User className="w-4 h-4" />
+            </button>
+
+            {/* DAILY BRIEFING BUTTON */}
             <button 
                 onClick={() => setAnalysisMode(true)}
                 className="p-2 border border-gray-800 rounded-full hover:border-jarvis-cyan hover:bg-jarvis-cyan/10 transition-colors text-gray-500 hover:text-jarvis-cyan"
@@ -62,6 +78,7 @@ function App() {
                 <Brain className="w-4 h-4" />
             </button>
 
+            {/* STATUS INDICATOR */}
             <div className="flex items-center gap-2 text-xs text-gray-500 border border-gray-800 px-3 py-1 rounded-full">
                 <Activity className={`w-3 h-3 ${status === 'processing' ? 'animate-spin text-jarvis-cyan' : ''}`} />
                 <span>{status.toUpperCase()}</span>
@@ -112,7 +129,7 @@ function App() {
       </div>
 
       {/* INPUT CONSOLE */}
-      <div className="fixed bottom-0 left-0 w-full bg-black/80 backdrop-blur-md border-t border-gray-900 p-4">
+      <div className="fixed bottom-0 left-0 w-full bg-black/80 backdrop-blur-md border-t border-gray-900 p-4 z-30">
         <form onSubmit={handleCommand} className="max-w-lg mx-auto flex gap-3 items-center">
           
           <button 
