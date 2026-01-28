@@ -1,23 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from './store/useStore';
-import { useVoiceInput } from './hooks/useVoiceInput'; // Import the hook
+import { useVoiceInput } from './hooks/useVoiceInput';
+import DailyBriefing from './components/DailyBriefing'; // FEATURE 3 IMPORT
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, Send, Trash2, Activity, Disc, Zap } from 'lucide-react';
+import { Mic, Send, Trash2, Activity, Disc, Brain } from 'lucide-react'; // Added Brain icon
 
 function App() {
-  const { schedule, addTask, removeTask, status, setStatus } = useStore();
+  const { schedule, addTask, removeTask, status, setStatus, setAnalysisMode } = useStore();
   const [input, setInput] = useState("");
 
   // --- VOICE LOGIC START ---
-  // When you stop talking, this function runs automatically
   const handleVoiceEnd = () => {
-    // We'll let the user verify the text before sending, 
-    // or you can call handleCommand() here to make it instant.
+    // Optional: Auto-send logic can go here
   };
 
   const { isListening, transcript, startListening, stopListening } = useVoiceInput(handleVoiceEnd);
 
-  // Sync voice text into the input box in real-time
   useEffect(() => {
     if (transcript) setInput(transcript);
   }, [transcript]);
@@ -29,10 +27,8 @@ function App() {
 
     setStatus("processing");
     
-    // SIMULATION: Simple Keyword Detection (The "Brain" placeholder)
     setTimeout(() => {
       if (input.toLowerCase().includes("delete")) {
-        // Example: "Delete task 1" (Very basic logic for now)
         const lastTask = schedule[schedule.length - 1];
         if (lastTask) removeTask(lastTask.id);
       } else {
@@ -44,23 +40,37 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-jarvis-bg text-jarvis-text p-4 pb-32 max-w-lg mx-auto flex flex-col font-mono selection:bg-jarvis-cyan selection:text-black">
+    <div className="min-h-screen bg-jarvis-bg text-jarvis-text p-4 pb-32 max-w-lg mx-auto flex flex-col font-mono selection:bg-jarvis-cyan selection:text-black relative">
       
+      {/* FEATURE 3: THE OVERLAY COMPONENT */}
+      <DailyBriefing />
+
       {/* HEADER */}
       <header className="flex justify-between items-center py-6 border-b border-gray-900 mb-8 sticky top-0 bg-jarvis-bg/90 backdrop-blur-sm z-10">
         <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${status === 'processing' ? 'bg-jarvis-red animate-ping' : 'bg-jarvis-cyan'}`}></div>
             <h1 className="text-xl font-bold tracking-[0.2em] text-jarvis-cyan">JARVIS.OS</h1>
         </div>
-        <div className="flex items-center gap-2 text-xs text-gray-500 border border-gray-800 px-3 py-1 rounded-full">
-          <Activity className={`w-3 h-3 ${status === 'processing' ? 'animate-spin text-jarvis-cyan' : ''}`} />
-          <span>{status.toUpperCase()}</span>
+        
+        <div className="flex items-center gap-3">
+            {/* FEATURE 3 TRIGGER BUTTON */}
+            <button 
+                onClick={() => setAnalysisMode(true)}
+                className="p-2 border border-gray-800 rounded-full hover:border-jarvis-cyan hover:bg-jarvis-cyan/10 transition-colors text-gray-500 hover:text-jarvis-cyan"
+                title="Start Daily Analysis"
+            >
+                <Brain className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2 text-xs text-gray-500 border border-gray-800 px-3 py-1 rounded-full">
+                <Activity className={`w-3 h-3 ${status === 'processing' ? 'animate-spin text-jarvis-cyan' : ''}`} />
+                <span>{status.toUpperCase()}</span>
+            </div>
         </div>
       </header>
 
       {/* ORB (Visual Feedback) */}
       <div className="flex justify-center mb-8 relative">
-        {/* The Orb reacts to "isListening" now */}
         <div className={`relative w-24 h-24 rounded-full border border-gray-800 flex items-center justify-center transition-all duration-300 
             ${isListening ? 'shadow-[0_0_80px_rgba(0,243,255,0.6)] border-jarvis-cyan scale-110' : ''}
             ${status === 'processing' ? 'shadow-[0_0_50px_rgba(112,0,255,0.5)] border-purple-500' : ''}
@@ -105,13 +115,12 @@ function App() {
       <div className="fixed bottom-0 left-0 w-full bg-black/80 backdrop-blur-md border-t border-gray-900 p-4">
         <form onSubmit={handleCommand} className="max-w-lg mx-auto flex gap-3 items-center">
           
-          {/* UPDATED: Voice Button triggers hook */}
           <button 
             type="button" 
             onMouseDown={startListening} 
             onMouseUp={stopListening}
-            onTouchStart={startListening} // Mobile support
-            onTouchEnd={stopListening}    // Mobile support
+            onTouchStart={startListening} 
+            onTouchEnd={stopListening}    
             className={`p-3 rounded-full transition-all duration-200 ${
                 isListening ? 'bg-jarvis-cyan text-black scale-110' : 'bg-gray-900 text-jarvis-cyan border border-gray-800'
             }`}
