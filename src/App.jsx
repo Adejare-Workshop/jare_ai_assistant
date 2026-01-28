@@ -3,7 +3,7 @@ import { useStore } from './store/useStore';
 import { useScheduler } from './hooks/useScheduler'; 
 import { useProactive } from './hooks/useProactive';
 import { useVoiceInput } from './hooks/useVoiceInput';
-import { useConnectivity } from './hooks/useConnectivity'; // Feature 22 Import
+import { useConnectivity } from './hooks/useConnectivity'; // Feature 22
 import DailyBriefing from './components/DailyBriefing';
 import ProfilePanel from './components/ProfilePanel';
 import SystemLogs from './components/SystemLogs';
@@ -22,12 +22,12 @@ function App() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isLogsOpen, setIsLogsOpen] = useState(false);
 
-  // SYSTEMS
+  // --- BACKGROUND SYSTEMS ---
   useScheduler(); 
   useProactive();
-  const isOnline = useConnectivity(); // Feature 22: Online Check
+  const isOnline = useConnectivity(); // Feature 22 Check
 
-  // VOICE LOGIC
+  // --- VOICE LOGIC ---
   const handleVoiceEnd = () => {};
   const { isListening, transcript, startListening, stopListening } = useVoiceInput(handleVoiceEnd);
 
@@ -41,8 +41,8 @@ function App() {
 
     setStatus("processing");
     
-    // Simulate Personality Response
-    const responseTime = personality === 'deep' ? 1500 : 800; // Deep takes longer to think
+    // Simulate personality-based latency
+    const delay = personality === 'deep' ? 1200 : 600;
 
     setTimeout(() => {
       if (input.toLowerCase().includes("delete")) {
@@ -53,13 +53,13 @@ function App() {
       }
       setStatus("idle");
       setInput("");
-    }, responseTime);
+    }, delay);
   };
 
   return (
     <div className="min-h-screen bg-jarvis-bg text-jarvis-text p-4 pb-32 max-w-lg mx-auto flex flex-col font-mono selection:bg-jarvis-cyan selection:text-black relative overflow-hidden">
       
-      {/* OVERLAYS */}
+      {/* --- OVERLAYS --- */}
       <AnimatePresence>
         {isProfileOpen && <ProfilePanel isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />}
       </AnimatePresence>
@@ -68,20 +68,20 @@ function App() {
       </AnimatePresence>
       <DailyBriefing />
 
-      {/* HEADER */}
+      {/* --- HEADER --- */}
       <header className="flex justify-between items-center py-6 border-b border-gray-900 mb-8 sticky top-0 bg-jarvis-bg/90 backdrop-blur-sm z-10">
         <div className="flex items-center gap-2">
-            {/* Online/Offline Status Indicator */}
+            {/* Offline Status Dot */}
             <div className={`w-2 h-2 rounded-full ${!isOnline ? 'bg-jarvis-red' : status === 'processing' ? 'bg-jarvis-red animate-ping' : 'bg-jarvis-cyan'}`}></div>
             <h1 className="text-xl font-bold tracking-[0.2em] text-jarvis-cyan">JARVIS.OS</h1>
         </div>
         
         <div className="flex items-center gap-3">
-            {/* Personality Toggle */}
+            {/* Feature 20: Personality Toggle */}
             <button 
                 onClick={togglePersonality}
-                className={`p-2 border rounded-full transition-colors ${personality === 'deep' ? 'border-jarvis-cyan text-jarvis-cyan' : 'border-gray-800 text-gray-500 hover:text-white'}`}
-                title={`Current Mode: ${personality.toUpperCase()}`}
+                className={`p-2 border rounded-full transition-colors ${personality === 'deep' ? 'border-jarvis-cyan text-jarvis-cyan bg-jarvis-cyan/10' : 'border-gray-800 text-gray-500 hover:text-white'}`}
+                title={`Mode: ${personality.toUpperCase()}`}
             >
                 <MessageSquare className="w-4 h-4" />
             </button>
@@ -93,15 +93,15 @@ function App() {
                 <User className="w-4 h-4" />
             </button>
             
-            {/* Connectivity Badge */}
-            <div className={`flex items-center gap-2 text-xs border px-3 py-1 rounded-full transition-colors ${!isOnline ? 'border-jarvis-red text-jarvis-red bg-jarvis-red/10' : 'border-gray-800 text-gray-500'}`}>
+            {/* Feature 22: Connectivity Badge */}
+            <div className={`hidden md:flex items-center gap-2 text-xs border px-3 py-1 rounded-full transition-colors ${!isOnline ? 'border-jarvis-red text-jarvis-red bg-jarvis-red/10' : 'border-gray-800 text-gray-500'}`}>
                 {!isOnline ? <WifiOff className="w-3 h-3" /> : <Wifi className="w-3 h-3" />}
-                <span className="hidden md:inline">{!isOnline ? "OFFLINE" : "ONLINE"}</span>
+                <span>{!isOnline ? "OFFLINE" : "ONLINE"}</span>
             </div>
         </div>
       </header>
 
-      {/* VOICE ORB */}
+      {/* --- VOICE ORB --- */}
       <div className="flex justify-center mb-8 relative">
         <div className={`relative w-24 h-24 rounded-full border border-gray-800 flex items-center justify-center transition-all duration-300 
             ${isListening ? 'shadow-[0_0_80px_rgba(0,243,255,0.6)] border-jarvis-cyan scale-110' : ''}
@@ -109,19 +109,18 @@ function App() {
         `}>
             {isListening ? <Mic className="w-10 h-10 text-white animate-pulse" /> : <Disc className={`w-12 h-12 text-gray-800 ${status === 'processing' ? 'animate-spin text-purple-500' : ''}`} />}
         </div>
-        {/* Personality Indicator */}
         <div className="absolute -bottom-6 text-[10px] tracking-widest text-gray-600 font-mono uppercase">
             MODE: {personality}
         </div>
       </div>
 
-      {/* TIMELINE */}
+      {/* --- TIMELINE --- */}
       <div className="flex-1 space-y-4">
         {schedule.length === 0 && suggestions.length === 0 && (
           <div className="text-center text-gray-600 mt-10 tracking-widest text-xs">NO ACTIVE PROTOCOLS</div>
         )}
 
-        {/* GHOST TASKS */}
+        {/* 1. GHOST TASKS (Feature 10) */}
         <AnimatePresence>
             {suggestions.map((item) => (
                 <motion.div
@@ -147,7 +146,7 @@ function App() {
             ))}
         </AnimatePresence>
 
-        {/* REAL TASKS */}
+        {/* 2. REAL TASKS */}
         <AnimatePresence>
           {schedule.map((item) => (
             <motion.div
@@ -175,7 +174,7 @@ function App() {
         </AnimatePresence>
       </div>
 
-      {/* INPUT */}
+      {/* --- INPUT --- */}
       <div className="fixed bottom-0 left-0 w-full bg-black/80 backdrop-blur-md border-t border-gray-900 p-4 z-30">
         <form onSubmit={handleCommand} className="max-w-lg mx-auto flex gap-3 items-center">
           <button type="button" onMouseDown={startListening} onMouseUp={stopListening} onTouchStart={startListening} onTouchEnd={stopListening} className={`p-3 rounded-full transition-all duration-200 ${isListening ? 'bg-jarvis-cyan text-black scale-110' : 'bg-gray-900 text-jarvis-cyan border border-gray-800'}`}>
