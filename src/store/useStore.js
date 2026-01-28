@@ -14,9 +14,12 @@ export const useStore = create(
       
       // --- OPERATIONAL DATA ---
       schedule: [],
-      suggestions: [], // NEW: Ghost Tasks
+      suggestions: [], // Ghost Tasks
       status: "idle", 
-      logs: [],
+      logs: [], // System Terminal Data
+      
+      // --- PERSONALITY CORE (Feature 20) ---
+      personality: 'brief', // 'brief' or 'deep'
 
       // --- ANALYSIS MODE STATE ---
       isAnalysisMode: false,
@@ -33,6 +36,21 @@ export const useStore = create(
       // --- ACTIONS ---
 
       setStatus: (status) => set({ status }),
+
+      // Toggle Personality
+      togglePersonality: () => set((state) => {
+        const newMode = state.personality === 'brief' ? 'deep' : 'brief';
+        const newLog = {
+            id: Date.now(),
+            timestamp: new Date().toLocaleTimeString(),
+            message: `Voice synthesis switched to ${newMode.toUpperCase()} mode.`,
+            type: 'info'
+        };
+        return { 
+            personality: newMode,
+            logs: [newLog, ...state.logs].slice(0, 50)
+        };
+      }),
 
       updateUser: (userData) => set((state) => {
         const newLog = {
@@ -104,7 +122,6 @@ export const useStore = create(
 
       // --- SUGGESTION LOGIC (Feature 10) ---
       addSuggestion: (text, time) => set((state) => {
-        // Avoid duplicates
         const exists = state.schedule.find(t => t.text === text) || 
                        state.suggestions.find(s => s.text === text);
         if (exists) return {};
@@ -147,8 +164,8 @@ export const useStore = create(
       rejectSuggestion: (id) => set((state) => ({
         suggestions: state.suggestions.filter(s => s.id !== id)
       })),
-      // -------------------------------------
 
+      // --- MAIN TASK LOGIC ---
       addTask: (input) => set((state) => {
         const data = parseCommand(input);
         
