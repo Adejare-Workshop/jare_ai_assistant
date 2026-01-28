@@ -5,13 +5,13 @@ import { parseCommand } from '../utils/nlp';
 export const useStore = create(
   persist(
     (set, get) => ({
-      // --- IDENTITY CORE (Now with XP) ---
+      // --- IDENTITY CORE ---
       user: { 
         name: "Commander",
         sleepGoal: 8,
         focusBlock: 45,
-        xp: 0,     // Feature 7
-        level: 1   // Feature 7
+        xp: 0,     // Gamification
+        level: 1   // Gamification
       },
       
       // --- OPERATIONAL DATA ---
@@ -37,14 +37,47 @@ export const useStore = create(
         "What habit do you want to strictly enforce today?"
       ],
 
-      // --- ACTIONS ---
+      // --- SYSTEM ACTIONS (Feature 26) ---
 
       setStatus: (status) => set({ status }),
 
-      // --- GAMIFICATION ACTIONS (Feature 7) ---
+      // 1. FACTORY RESET
+      hardReset: () => {
+        localStorage.removeItem('jarvis-storage');
+        window.location.reload(); 
+      },
+
+      // 2. IMPORT DATA
+      importData: (jsonData) => set((state) => {
+        try {
+            const parsed = JSON.parse(jsonData);
+            if (!parsed.user || !parsed.schedule) throw new Error("Invalid format");
+            
+            return {
+                ...parsed, // Overwrite state with file data
+                logs: [{
+                    id: Date.now(),
+                    timestamp: new Date().toLocaleTimeString(),
+                    message: "System state restored from external backup.",
+                    type: 'success'
+                }, ...state.logs].slice(0, 50)
+            };
+        } catch (e) {
+            return {
+                logs: [{
+                    id: Date.now(),
+                    timestamp: new Date().toLocaleTimeString(),
+                    message: "Data import failed: Corrupt file.",
+                    type: 'error'
+                }, ...state.logs].slice(0, 50)
+            };
+        }
+      }),
+
+      // --- GAMIFICATION ACTIONS ---
       addXp: (amount) => set((state) => {
         const newXp = state.user.xp + amount;
-        const newLevel = Math.floor(newXp / 100) + 1; // Level up every 100 XP
+        const newLevel = Math.floor(newXp / 100) + 1; // 100 XP per level
         
         let logMsg = `Gained ${amount} XP.`;
         if (newLevel > state.user.level) {
