@@ -1,20 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from './store/useStore';
+import { useVoiceInput } from './hooks/useVoiceInput'; // Import the hook
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, Send, Trash2, CheckCircle, Activity, Disc } from 'lucide-react';
+import { Mic, Send, Trash2, Activity, Disc, Zap } from 'lucide-react';
 
 function App() {
   const { schedule, addTask, removeTask, status, setStatus } = useStore();
   const [input, setInput] = useState("");
 
+  // --- VOICE LOGIC START ---
+  // When you stop talking, this function runs automatically
+  const handleVoiceEnd = () => {
+    // We'll let the user verify the text before sending, 
+    // or you can call handleCommand() here to make it instant.
+  };
+
+  const { isListening, transcript, startListening, stopListening } = useVoiceInput(handleVoiceEnd);
+
+  // Sync voice text into the input box in real-time
+  useEffect(() => {
+    if (transcript) setInput(transcript);
+  }, [transcript]);
+  // --- VOICE LOGIC END ---
+
   const handleCommand = (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!input.trim()) return;
 
     setStatus("processing");
-    // Simulate AI Latency
+    
+    // SIMULATION: Simple Keyword Detection (The "Brain" placeholder)
     setTimeout(() => {
-      addTask(input);
+      if (input.toLowerCase().includes("delete")) {
+        // Example: "Delete task 1" (Very basic logic for now)
+        const lastTask = schedule[schedule.length - 1];
+        if (lastTask) removeTask(lastTask.id);
+      } else {
+        addTask(input);
+      }
       setStatus("idle");
       setInput("");
     }, 1000);
@@ -36,9 +59,17 @@ function App() {
       </header>
 
       {/* ORB (Visual Feedback) */}
-      <div className="flex justify-center mb-8">
-        <div className={`relative w-24 h-24 rounded-full border border-gray-800 flex items-center justify-center transition-all duration-500 ${status === 'processing' ? 'shadow-[0_0_50px_rgba(0,243,255,0.3)] border-jarvis-cyan' : ''}`}>
-            <Disc className={`w-12 h-12 text-gray-800 ${status === 'processing' ? 'animate-spin text-jarvis-cyan' : ''}`} />
+      <div className="flex justify-center mb-8 relative">
+        {/* The Orb reacts to "isListening" now */}
+        <div className={`relative w-24 h-24 rounded-full border border-gray-800 flex items-center justify-center transition-all duration-300 
+            ${isListening ? 'shadow-[0_0_80px_rgba(0,243,255,0.6)] border-jarvis-cyan scale-110' : ''}
+            ${status === 'processing' ? 'shadow-[0_0_50px_rgba(112,0,255,0.5)] border-purple-500' : ''}
+        `}>
+            {isListening ? (
+                <Mic className="w-10 h-10 text-white animate-pulse" />
+            ) : (
+                <Disc className={`w-12 h-12 text-gray-800 ${status === 'processing' ? 'animate-spin text-purple-500' : ''}`} />
+            )}
         </div>
       </div>
 
@@ -60,7 +91,6 @@ function App() {
                <div className="text-xs text-gray-500 mb-1">{item.time || "PENDING"} // {item.type?.toUpperCase()}</div>
                <div className="text-sm font-bold text-gray-200">{item.text}</div>
               
-              {/* Hover Actions */}
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button onClick={() => removeTask(item.id)} className="text-gray-600 hover:text-jarvis-red transition-colors">
                   <Trash2 className="w-4 h-4" />
@@ -75,7 +105,17 @@ function App() {
       <div className="fixed bottom-0 left-0 w-full bg-black/80 backdrop-blur-md border-t border-gray-900 p-4">
         <form onSubmit={handleCommand} className="max-w-lg mx-auto flex gap-3 items-center">
           
-          <button type="button" className="p-3 rounded-full bg-gray-900 text-jarvis-cyan border border-gray-800 hover:bg-jarvis-cyan hover:text-black transition-colors">
+          {/* UPDATED: Voice Button triggers hook */}
+          <button 
+            type="button" 
+            onMouseDown={startListening} 
+            onMouseUp={stopListening}
+            onTouchStart={startListening} // Mobile support
+            onTouchEnd={stopListening}    // Mobile support
+            className={`p-3 rounded-full transition-all duration-200 ${
+                isListening ? 'bg-jarvis-cyan text-black scale-110' : 'bg-gray-900 text-jarvis-cyan border border-gray-800'
+            }`}
+          >
             <Mic className="w-5 h-5" />
           </button>
 
@@ -84,7 +124,7 @@ function App() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Awaiting command..."
+              placeholder={isListening ? "Listening..." : "Awaiting command..."}
               className="w-full bg-transparent border-b border-gray-800 py-2 px-4 text-sm focus:outline-none focus:border-jarvis-cyan text-white placeholder-gray-700 font-mono"
             />
           </div>
