@@ -14,12 +14,12 @@ export const useStore = create(
       
       // --- OPERATIONAL DATA ---
       schedule: [],
-      suggestions: [], // Ghost Tasks
+      suggestions: [], 
       status: "idle", 
-      logs: [], // System Terminal Data
+      logs: [],
       
-      // --- PERSONALITY CORE (Feature 20) ---
-      personality: 'brief', // 'brief' or 'deep'
+      // --- PERSONALITY CORE ---
+      personality: 'brief', 
 
       // --- ANALYSIS MODE STATE ---
       isAnalysisMode: false,
@@ -37,7 +37,6 @@ export const useStore = create(
 
       setStatus: (status) => set({ status }),
 
-      // Toggle Personality
       togglePersonality: () => set((state) => {
         const newMode = state.personality === 'brief' ? 'deep' : 'brief';
         const newLog = {
@@ -87,7 +86,9 @@ export const useStore = create(
                 type: "system",
                 time: "NOW",
                 dateObj: new Date(),
-                notified: false
+                notified: false,
+                isUrgent: true,
+                isImportant: true
             };
             newSchedule = [...state.schedule, reviewTask].sort((a, b) => {
                  if (!a.dateObj && !b.dateObj) return 0;
@@ -120,7 +121,7 @@ export const useStore = create(
         )
       })),
 
-      // --- SUGGESTION LOGIC (Feature 10) ---
+      // --- SUGGESTION LOGIC ---
       addSuggestion: (text, time) => set((state) => {
         const exists = state.schedule.find(t => t.text === text) || 
                        state.suggestions.find(s => s.text === text);
@@ -144,7 +145,9 @@ export const useStore = create(
             ...suggestion, 
             id: Date.now(), 
             type: 'task',
-            notified: false 
+            notified: false,
+            isUrgent: false,
+            isImportant: false
         };
 
         const newLog = {
@@ -165,10 +168,18 @@ export const useStore = create(
         suggestions: state.suggestions.filter(s => s.id !== id)
       })),
 
-      // --- MAIN TASK LOGIC ---
+      // --- MAIN TASK LOGIC (UPDATED WITH PRIORITY) ---
       addTask: (input) => set((state) => {
         const data = parseCommand(input);
         
+        // 1. PRIORITY DETECTION
+        const textLower = data.text.toLowerCase();
+        // Urgent keywords
+        const isUrgent = textLower.includes("now") || textLower.includes("asap") || textLower.includes("urgent") || textLower.includes("today") || data.time === "NOW";
+        // Important keywords
+        const isImportant = textLower.includes("critical") || textLower.includes("boss") || textLower.includes("deadline") || textLower.includes("project") || textLower.includes("meeting");
+
+        // 2. CONFLICT DETECTION
         let conflictWarning = false;
         if (data.dateObj) {
             const newTime = new Date(data.dateObj).getTime();
@@ -190,15 +201,16 @@ export const useStore = create(
             type: conflictWarning ? "conflict" : (data.type || "task"), 
             time: data.time || "TBD",
             dateObj: data.dateObj,
-            notified: false 
+            notified: false,
+            // NEW FIELDS
+            isUrgent,
+            isImportant
         };
 
         const newLog = {
             id: Date.now() + 1,
             timestamp: new Date().toLocaleTimeString(),
-            message: conflictWarning 
-                ? `CONFLICT: ${data.text} overlaps existing protocol.`
-                : `Protocol created: ${data.text}`,
+            message: `Protocol created: ${data.text} [P:${isUrgent ? 'U' : '-'}${isImportant ? 'I' : '-'}]`,
             type: conflictWarning ? 'warning' : 'info'
         };
 
