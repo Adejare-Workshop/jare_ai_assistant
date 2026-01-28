@@ -76,3 +76,14 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #00f3ff; 
 }
+/* Conflict Pulse Animation */
+@keyframes conflict-pulse {
+  0% { border-color: #ff003c; box-shadow: 0 0 0 rgba(255, 0, 60, 0); }
+  50% { border-color: #ff003c; box-shadow: 0 0 20px rgba(255, 0, 60, 0.5); }
+  100% { border-color: #ff003c; box-shadow: 0 0 0 rgba(255, 0, 60, 0); }
+}
+
+.conflict-task {
+  border-left-color: #ff003c !important;
+  animation: conflict-pulse 2s infinite;
+} 
