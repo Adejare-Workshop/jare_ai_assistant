@@ -7,22 +7,24 @@ import { useConnectivity } from './hooks/useConnectivity';
 import DailyBriefing from './components/DailyBriefing';
 import ProfilePanel from './components/ProfilePanel';
 import SystemLogs from './components/SystemLogs';
-import PriorityMatrix from './components/PriorityMatrix'; // Feature 15 Import
+import PriorityMatrix from './components/PriorityMatrix';
+import FocusOverlay from './components/FocusOverlay'; // Feature 11 Import
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, Send, Trash2, Activity, Disc, Brain, User, AlertTriangle, Terminal, Check, X, Wifi, WifiOff, MessageSquare, LayoutGrid } from 'lucide-react';
+import { Mic, Send, Trash2, Activity, Disc, Brain, User, AlertTriangle, Terminal, Check, X, Wifi, WifiOff, MessageSquare, LayoutGrid, Crosshair } from 'lucide-react';
 
 function App() {
   const { 
       schedule, suggestions, addTask, removeTask, 
       acceptSuggestion, rejectSuggestion,
       status, setStatus, setAnalysisMode,
-      personality, togglePersonality
+      personality, togglePersonality,
+      enterFocusMode // Feature 11 Action
   } = useStore();
   
   const [input, setInput] = useState("");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isLogsOpen, setIsLogsOpen] = useState(false);
-  const [isMatrixOpen, setIsMatrixOpen] = useState(false); // Feature 15 State
+  const [isMatrixOpen, setIsMatrixOpen] = useState(false);
 
   // --- BACKGROUND SYSTEMS ---
   useScheduler(); 
@@ -61,6 +63,8 @@ function App() {
     <div className="min-h-screen bg-jarvis-bg text-jarvis-text p-4 pb-32 max-w-lg mx-auto flex flex-col font-mono selection:bg-jarvis-cyan selection:text-black relative overflow-hidden">
       
       {/* --- OVERLAYS --- */}
+      <FocusOverlay /> {/* Feature 11: Digital Blinders */}
+      
       <AnimatePresence>
         {isProfileOpen && <ProfilePanel isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />}
       </AnimatePresence>
@@ -81,7 +85,6 @@ function App() {
         </div>
         
         <div className="flex items-center gap-3">
-            {/* Feature 15: Matrix Toggle */}
             <button 
                 onClick={() => setIsMatrixOpen(true)}
                 className="p-2 border border-gray-800 rounded-full hover:border-jarvis-cyan hover:text-jarvis-cyan transition-colors text-gray-500"
@@ -168,7 +171,7 @@ function App() {
                    {item.time || "PENDING"} // {item.type?.toUpperCase()}
                    {item.type === 'conflict' && <AlertTriangle className="w-3 h-3 text-jarvis-red animate-pulse"/>}
                    
-                   {/* Priority Indicators */}
+                   {/* Priority Badges */}
                    {item.isUrgent && <span className="text-[10px] bg-jarvis-red/20 text-jarvis-red px-1 rounded">URGENT</span>}
                    {item.isImportant && <span className="text-[10px] bg-yellow-500/20 text-yellow-500 px-1 rounded">CRITICAL</span>}
                </div>
@@ -180,7 +183,13 @@ function App() {
                {item.type === 'conflict' && (<div className="text-[10px] text-jarvis-red mt-1 font-mono uppercase tracking-wider">Warning: Schedule Overlap Detected</div>)}
               
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => removeTask(item.id)} className="text-gray-600 hover:text-jarvis-red transition-colors"><Trash2 className="w-4 h-4" /></button>
+                {/* Feature 11: Focus Button */}
+                <button onClick={() => enterFocusMode(item.id)} className="text-gray-600 hover:text-jarvis-cyan transition-colors" title="Enter Focus Protocol">
+                    <Crosshair className="w-4 h-4" />
+                </button>
+                <button onClick={() => removeTask(item.id)} className="text-gray-600 hover:text-jarvis-red transition-colors">
+                    <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             </motion.div>
           ))}
