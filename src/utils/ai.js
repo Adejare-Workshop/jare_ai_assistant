@@ -1,12 +1,11 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-export const processWithGemini = async (apiKey, userText, currentContext) => {
+export const processWithGemini = async (apiKey, userText) => {
   if (!apiKey) throw new Error("No API Key");
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-  // We give the AI the current time so it understands "tomorrow" or "next tuesday"
   const now = new Date();
   
   const prompt = `
