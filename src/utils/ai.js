@@ -4,7 +4,7 @@ export const processWithGemini = async (apiKey, userText) => {
   if (!apiKey) throw new Error("No API Key");
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
   const now = new Date();
   
