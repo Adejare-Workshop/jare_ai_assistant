@@ -5,7 +5,7 @@ export const processWithGemini = async (apiKey, userText) => {
 
   const genAI = new GoogleGenerativeAI(apiKey);
   // FIX: Using the modern 1.5 Flash model
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
   const now = new Date();
   
