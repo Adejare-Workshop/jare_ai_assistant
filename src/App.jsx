@@ -10,13 +10,14 @@ import ProfilePanel from './components/ProfilePanel';
 import SystemLogs from './components/SystemLogs';
 import PriorityMatrix from './components/PriorityMatrix';
 import FocusOverlay from './components/FocusOverlay';
-import SettingsPanel from './components/SettingsPanel'; // Feature 26
+import SettingsPanel from './components/SettingsPanel'; 
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, Send, Trash2, Activity, Disc, Brain, User, AlertTriangle, Terminal, Check, X, Wifi, WifiOff, MessageSquare, LayoutGrid, Crosshair, Star, Settings } from 'lucide-react';
 
 function App() {
   const { 
-      user, schedule, suggestions, addTask, removeTask, completeTask,
+      user, schedule, suggestions, removeTask, completeTask,
+      processInput, // NEW: Smart Input Processor
       acceptSuggestion, rejectSuggestion,
       status, setStatus, setAnalysisMode,
       personality, togglePersonality,
@@ -24,11 +25,10 @@ function App() {
   } = useStore();
   
   const [input, setInput] = useState("");
-  // UI States
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isLogsOpen, setIsLogsOpen] = useState(false);
   const [isMatrixOpen, setIsMatrixOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false); // Feature 26 State
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // SYSTEMS
   useScheduler(); 
@@ -49,22 +49,11 @@ function App() {
     if (!input.trim()) return;
 
     playClick();
-    setStatus("processing");
     
-    const delay = personality === 'deep' ? 1200 : 600;
-
-    setTimeout(() => {
-      if (input.toLowerCase().includes("delete")) {
-        const lastTask = schedule[schedule.length - 1];
-        if (lastTask) removeTask(lastTask.id);
-        playError();
-      } else {
-        addTask(input);
-        playSuccess();
-      }
-      setStatus("idle");
-      setInput("");
-    }, delay);
+    // CALL THE SMART PROCESSOR
+    processInput(input);
+    
+    setInput("");
   };
 
   const withSound = (action) => () => {
@@ -112,15 +101,12 @@ function App() {
             <button onMouseEnter={playHover} onClick={withSound(() => setIsSettingsOpen(true))} className="p-2 border border-gray-800 rounded-full hover:border-white hover:text-white transition-colors text-gray-500" title="System Core">
                 <Settings className="w-4 h-4" />
             </button>
-
             <button onMouseEnter={playHover} onClick={withSound(() => setIsMatrixOpen(true))} className="p-2 border border-gray-800 rounded-full hover:border-jarvis-cyan hover:text-jarvis-cyan transition-colors text-gray-500" title="Tactical Mode">
                 <LayoutGrid className="w-4 h-4" />
             </button>
-
             <button onMouseEnter={playHover} onClick={withSound(togglePersonality)} className={`p-2 border rounded-full transition-colors ${personality === 'deep' ? 'border-jarvis-cyan text-jarvis-cyan bg-jarvis-cyan/10' : 'border-gray-800 text-gray-500 hover:text-white'}`}>
                 <MessageSquare className="w-4 h-4" />
             </button>
-
             <button onMouseEnter={playHover} onClick={withSound(() => setIsLogsOpen(!isLogsOpen))} className={`p-2 border rounded-full transition-colors ${isLogsOpen ? 'border-jarvis-cyan text-jarvis-cyan bg-jarvis-cyan/10' : 'border-gray-800 text-gray-500 hover:text-white'}`}>
                 <Terminal className="w-4 h-4" />
             </button>
@@ -196,6 +182,8 @@ function App() {
                <div className={`text-sm font-bold ${item.type === 'conflict' ? 'text-jarvis-red' : 'text-gray-200'}`}>
                    {item.text}
                </div>
+               
+               {item.type === 'conflict' && (<div className="text-[10px] text-jarvis-red mt-1 font-mono uppercase tracking-wider">Warning: Schedule Overlap Detected</div>)}
               
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 {/* QUICK COMPLETE */}
