@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { parseCommand } from '../utils/nlp';
-import { processWithGemini } from '../utils/ai'; // IMPORT AI SERVICE
+import { processWithGemini } from '../utils/ai';
 
 export const useStore = create(
   persist(
@@ -21,10 +21,11 @@ export const useStore = create(
       status: "idle", 
       logs: [],
       personality: 'brief', 
-      
-      // --- AI CORE ---
-      // WARNING: Ideally keep this empty and set it in the UI, but I've added it here as requested.
       apiKey: "AIzaSyBfSZWEa-QZvclte8Z_YyyfFq0bXwOT2BQ", 
+
+      // --- ANALYTICS CORE (Feature 23) ---
+      history: [], // Stores archived tasks
+      focusStats: { totalMinutes: 0, sessions: 0 },
 
       // --- FOCUS PROTOCOL STATE ---
       isFocusMode: false,
@@ -45,17 +46,15 @@ export const useStore = create(
       // --- ACTIONS ---
 
       setStatus: (status) => set({ status }),
-      
       setApiKey: (key) => set({ apiKey: key }),
 
-      // --- SMART INPUT PROCESSOR (THE BRAIN) ---
+      // --- SMART INPUT PROCESSOR ---
       processInput: async (input) => {
         const state = get();
         set({ status: 'processing' });
 
         let aiData = null;
 
-        // 1. Try AI Processing
         if (state.apiKey) {
             try {
                 aiData = await processWithGemini(state.apiKey, input);
@@ -64,17 +63,13 @@ export const useStore = create(
             }
         }
 
-        // 2. Logic Branch
         if (aiData) {
-            // Speak the AI's response
             if (aiData.response && 'speechSynthesis' in window) {
                 const utterance = new SpeechSynthesisUtterance(aiData.response);
-                // Adjust voice speed based on personality
                 utterance.rate = state.personality === 'brief' ? 1.2 : 0.9;
                 window.speechSynthesis.speak(utterance);
             }
 
-            // Execute Intent
             if (aiData.intent === 'delete') {
                 const last = state.schedule[state.schedule.length - 1];
                 if (last) get().removeTask(last.id);
@@ -89,14 +84,12 @@ export const useStore = create(
                 });
             }
         } else {
-            // FALLBACK: OLD REGEX LOGIC
             get().addTask(input); 
         }
 
         set({ status: 'idle' });
       },
 
-      // Helper to add task directly from AI data
       addTaskDirectly: (taskData) => set((state) => {
          const newItem = { 
             id: Date.now(), 
@@ -121,8 +114,7 @@ export const useStore = create(
         };
       }),
 
-      // --- EXISTING ACTIONS (Kept for compatibility/fallback) ---
-      
+      // --- SYSTEM ACTIONS ---
       hardReset: () => {
         localStorage.removeItem('jarvis-storage');
         window.location.reload(); 
@@ -134,42 +126,93 @@ export const useStore = create(
             if (!parsed.user || !parsed.schedule) throw new Error("Invalid format");
             return {
                 ...parsed,
-                logs: [{ id: Date.now(), timestamp: new Date().toLocaleTimeString(), message: "System state restored.", type: 'success' }, ...state.logs]
+                logs: [{ id: Date.now(), timestamp: new Date().toLocaleTimeString(), message: "System state restored.", type: 'success' }, ...state.logs].slice(0, 50)
             };
         } catch (e) {
-            return { logs: [{ id: Date.now(), timestamp: new Date().toLocaleTimeString(), message: "Import failed.", type: 'error' }, ...state.logs] };
+            return { logs: [{ id: Date.now(), timestamp: new Date().toLocaleTimeString(), message: "Import failed.", type: 'error' }, ...state.logs].slice(0, 50) };
         }
       }),
 
+      // --- GAMIFICATION & TASK COMPLETION ---
       addXp: (amount) => set((state) => {
         const newXp = state.user.xp + amount;
         const newLevel = Math.floor(newXp / 100) + 1; 
         let logMsg = `Gained ${amount} XP.`;
         if (newLevel > state.user.level) logMsg = `LEVEL UP! Promotion to Level ${newLevel}.`;
-        return { user: { ...state.user, xp: newXp, level: newLevel }, logs: [{ id: Date.now(), timestamp: new Date().toLocaleTimeString(), message: logMsg, type: 'success' }, ...state.logs].slice(0, 50) };
+        
+        return { 
+            user: { ...state.user, xp: newXp, level: newLevel }, 
+            logs: [{ id: Date.now(), timestamp: new Date().toLocaleTimeString(), message: logMsg, type: 'success' }, ...state.logs].slice(0, 50) 
+        };
       }),
 
       completeTask: (id) => {
         const state = get();
         const task = state.schedule.find(t => t.id === id);
-        let xpGain = 10; 
-        if (task?.isUrgent) xpGain += 5;
-        if (task?.isImportant) xpGain += 10;
-        get().addXp(xpGain);
-        get().removeTask(id);
+        if (!task) return;
+        
+        // 1. Calculate XP
+        let xpGain = 10;
+        if (task.isUrgent) xpGain += 5;
+        if (task.isImportant) xpGain += 10;
+
+        // 2. Archive Task
+        const archivedTask = {
+            ...task,
+            completedAt: new Date(),
+            xpEarned: xpGain
+        };
+
+        // 3. Update State
+        set((state) => ({
+            schedule: state.schedule.filter(t => t.id !== id),
+            history: [archivedTask, ...state.history].slice(0, 100), // Keep last 100
+            user: { 
+                ...state.user, 
+                xp: state.user.xp + xpGain,
+                level: Math.floor((state.user.xp + xpGain) / 100) + 1
+            },
+            logs: [{
+                id: Date.now(),
+                timestamp: new Date().toLocaleTimeString(),
+                message: `Objective "${task.text}" archived. +${xpGain} XP.`,
+                type: 'success'
+            }, ...state.logs].slice(0, 50)
+        }));
       },
 
+      // --- FOCUS MODE ---
       enterFocusMode: (taskId) => set((state) => {
         const task = state.schedule.find(t => t.id === taskId);
-        return { isFocusMode: true, activeTaskId: taskId, logs: [{ id: Date.now(), timestamp: new Date().toLocaleTimeString(), message: `Focus Protocol: ${task ? task.text : 'Unknown'}`, type: 'warning' }, ...state.logs].slice(0, 50) };
+        return { 
+            isFocusMode: true, 
+            activeTaskId: taskId, 
+            logs: [{ id: Date.now(), timestamp: new Date().toLocaleTimeString(), message: `Focus Protocol: ${task ? task.text : 'Unknown'}`, type: 'warning' }, ...state.logs].slice(0, 50) 
+        };
       }),
 
       exitFocusMode: (completed = false) => {
         const state = get();
-        if (completed && state.activeTaskId) get().completeTask(state.activeTaskId);
-        set((state) => ({ isFocusMode: false, activeTaskId: null, logs: [{ id: Date.now(), timestamp: new Date().toLocaleTimeString(), message: completed ? "Focus Complete." : "Focus Aborted.", type: completed ? 'success' : 'error' }, ...state.logs].slice(0, 50) }));
+        
+        // Track Focus Stats
+        if (completed) {
+            set(s => ({
+                focusStats: {
+                    totalMinutes: s.focusStats.totalMinutes + 25, // Assume 25m block
+                    sessions: s.focusStats.sessions + 1
+                }
+            }));
+            if (state.activeTaskId) get().completeTask(state.activeTaskId);
+        }
+
+        set((state) => ({
+            isFocusMode: false,
+            activeTaskId: null,
+            logs: [{ id: Date.now(), timestamp: new Date().toLocaleTimeString(), message: completed ? "Focus Complete." : "Focus Aborted.", type: completed ? 'success' : 'error' }, ...state.logs].slice(0, 50)
+        }));
       },
 
+      // --- OTHER ACTIONS ---
       togglePersonality: () => set((state) => ({ personality: state.personality === 'brief' ? 'deep' : 'brief' })),
       
       updateUser: (userData) => set((state) => ({ user: { ...state.user, ...userData } })),
