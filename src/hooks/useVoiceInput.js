@@ -6,44 +6,49 @@ export const useVoiceInput = (onSpeechEnd) => {
   const [recognition, setRecognition] = useState(null);
 
   useEffect(() => {
-    // Check browser compatibility
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    
-    if (SpeechRecognition) {
-      const reco = new SpeechRecognition();
-      reco.continuous = false; // Stop after one sentence (Jarvis style)
-      reco.interimResults = true; // Show text while speaking
-      reco.lang = 'en-US';
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recog = new SpeechRecognition();
+      recog.continuous = false;
+      recog.interimResults = false;
+      recog.lang = 'en-US';
 
-      reco.onstart = () => setIsListening(true);
+      recog.onstart = () => setIsListening(true);
       
-      reco.onresult = (event) => {
-        const current = event.resultIndex;
-        const text = event.results[current][0].transcript;
+      recog.onresult = (event) => {
+        const text = event.results[0][0].transcript;
         setTranscript(text);
+        if (onSpeechEnd) onSpeechEnd(text);
       };
 
-      reco.onend = () => {
+      recog.onerror = (event) => {
+        console.error("Speech Error:", event.error);
         setIsListening(false);
-        if (onSpeechEnd) onSpeechEnd(); // Trigger processing when silence is detected
       };
 
-      setRecognition(reco);
+      recog.onend = () => {
+        setIsListening(false);
+      };
+
+      setRecognition(recog);
     }
-  }, [onSpeechEnd]);
+  }, []); // Run once on mount
 
   const startListening = useCallback(() => {
-    if (recognition) {
-      setTranscript("");
-      recognition.start();
-    } else {
-      alert("Voice interaction not supported in this browser. Try Chrome.");
+    if (recognition && !isListening) {
+      try {
+        recognition.start();
+      } catch (e) {
+        console.warn("Microphone already active");
+      }
     }
-  }, [recognition]);
+  }, [recognition, isListening]);
 
   const stopListening = useCallback(() => {
-    if (recognition) recognition.stop();
-  }, [recognition]);
+    if (recognition && isListening) {
+      recognition.stop();
+    }
+  }, [recognition, isListening]);
 
   return { isListening, transcript, startListening, stopListening };
 };
