@@ -10,14 +10,15 @@ import ProfilePanel from './components/ProfilePanel';
 import SystemLogs from './components/SystemLogs';
 import PriorityMatrix from './components/PriorityMatrix';
 import FocusOverlay from './components/FocusOverlay';
-import SettingsPanel from './components/SettingsPanel'; 
+import SettingsPanel from './components/SettingsPanel';
+import AnalyticsPanel from './components/AnalyticsPanel'; // Feature 23
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, Send, Trash2, Activity, Disc, Brain, User, AlertTriangle, Terminal, Check, X, Wifi, WifiOff, MessageSquare, LayoutGrid, Crosshair, Star, Settings } from 'lucide-react';
+import { Mic, Send, Trash2, Activity, Disc, Brain, User, AlertTriangle, Terminal, Check, X, Wifi, WifiOff, MessageSquare, LayoutGrid, Crosshair, Star, Settings, BarChart3 } from 'lucide-react';
 
 function App() {
   const { 
       user, schedule, suggestions, removeTask, completeTask,
-      processInput, // NEW: Smart Input Processor
+      processInput, 
       acceptSuggestion, rejectSuggestion,
       status, setStatus, setAnalysisMode,
       personality, togglePersonality,
@@ -25,10 +26,12 @@ function App() {
   } = useStore();
   
   const [input, setInput] = useState("");
+  // UI States
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isLogsOpen, setIsLogsOpen] = useState(false);
   const [isMatrixOpen, setIsMatrixOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false); // Feature 23
 
   // SYSTEMS
   useScheduler(); 
@@ -49,10 +52,7 @@ function App() {
     if (!input.trim()) return;
 
     playClick();
-    
-    // CALL THE SMART PROCESSOR
-    processInput(input);
-    
+    processInput(input); // Smart AI Processor
     setInput("");
   };
 
@@ -78,6 +78,9 @@ function App() {
       <AnimatePresence>
         {isSettingsOpen && <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />}
       </AnimatePresence>
+      <AnimatePresence>
+        {isAnalyticsOpen && <AnalyticsPanel isOpen={isAnalyticsOpen} onClose={() => setIsAnalyticsOpen(false)} />}
+      </AnimatePresence>
       <DailyBriefing />
 
       {/* --- HEADER --- */}
@@ -100,6 +103,9 @@ function App() {
         <div className="flex items-center gap-3">
             <button onMouseEnter={playHover} onClick={withSound(() => setIsSettingsOpen(true))} className="p-2 border border-gray-800 rounded-full hover:border-white hover:text-white transition-colors text-gray-500" title="System Core">
                 <Settings className="w-4 h-4" />
+            </button>
+            <button onMouseEnter={playHover} onClick={withSound(() => setIsAnalyticsOpen(true))} className="p-2 border border-gray-800 rounded-full hover:border-jarvis-cyan hover:text-jarvis-cyan transition-colors text-gray-500" title="Neural Dashboard">
+                <BarChart3 className="w-4 h-4" />
             </button>
             <button onMouseEnter={playHover} onClick={withSound(() => setIsMatrixOpen(true))} className="p-2 border border-gray-800 rounded-full hover:border-jarvis-cyan hover:text-jarvis-cyan transition-colors text-gray-500" title="Tactical Mode">
                 <LayoutGrid className="w-4 h-4" />
@@ -186,7 +192,6 @@ function App() {
                {item.type === 'conflict' && (<div className="text-[10px] text-jarvis-red mt-1 font-mono uppercase tracking-wider">Warning: Schedule Overlap Detected</div>)}
               
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                {/* QUICK COMPLETE */}
                 <button 
                     onClick={() => { playSuccess(); completeTask(item.id); }} 
                     className="text-gray-600 hover:text-green-400 transition-colors" 
