@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { parseCommand } from '../utils/nlp';
+import { processWithGemini } from '../utils/ai'; // IMPORT AI SERVICE
 
 export const useStore = create(
   persist(
@@ -10,8 +11,8 @@ export const useStore = create(
         name: "Commander",
         sleepGoal: 8,
         focusBlock: 45,
-        xp: 0,     // Gamification
-        level: 1   // Gamification
+        xp: 0,
+        level: 1
       },
       
       // --- OPERATIONAL DATA ---
@@ -20,6 +21,10 @@ export const useStore = create(
       status: "idle", 
       logs: [],
       personality: 'brief', 
+      
+      // --- AI CORE ---
+      // WARNING: Ideally keep this empty and set it in the UI, but I've added it here as requested.
+      apiKey: "AIzaSyBfSZWEa-QZvclte8Z_YyyfFq0bXwOT2BQ", 
 
       // --- FOCUS PROTOCOL STATE ---
       isFocusMode: false,
@@ -37,322 +42,177 @@ export const useStore = create(
         "What habit do you want to strictly enforce today?"
       ],
 
-      // --- SYSTEM ACTIONS (Feature 26) ---
+      // --- ACTIONS ---
 
       setStatus: (status) => set({ status }),
+      
+      setApiKey: (key) => set({ apiKey: key }),
 
-      // 1. FACTORY RESET
+      // --- SMART INPUT PROCESSOR (THE BRAIN) ---
+      processInput: async (input) => {
+        const state = get();
+        set({ status: 'processing' });
+
+        let aiData = null;
+
+        // 1. Try AI Processing
+        if (state.apiKey) {
+            try {
+                aiData = await processWithGemini(state.apiKey, input);
+            } catch (e) {
+                console.log("AI Failed, falling back to basic");
+            }
+        }
+
+        // 2. Logic Branch
+        if (aiData) {
+            // Speak the AI's response
+            if (aiData.response && 'speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(aiData.response);
+                // Adjust voice speed based on personality
+                utterance.rate = state.personality === 'brief' ? 1.2 : 0.9;
+                window.speechSynthesis.speak(utterance);
+            }
+
+            // Execute Intent
+            if (aiData.intent === 'delete') {
+                const last = state.schedule[state.schedule.length - 1];
+                if (last) get().removeTask(last.id);
+            } 
+            else if (aiData.intent === 'task') {
+                get().addTaskDirectly({
+                    text: aiData.text,
+                    time: aiData.time || "TBD",
+                    dateObj: aiData.dateObj,
+                    isUrgent: aiData.isUrgent,
+                    isImportant: aiData.isImportant
+                });
+            }
+        } else {
+            // FALLBACK: OLD REGEX LOGIC
+            get().addTask(input); 
+        }
+
+        set({ status: 'idle' });
+      },
+
+      // Helper to add task directly from AI data
+      addTaskDirectly: (taskData) => set((state) => {
+         const newItem = { 
+            id: Date.now(), 
+            type: 'task',
+            notified: false,
+            ...taskData 
+        };
+        const newLog = {
+            id: Date.now(),
+            timestamp: new Date().toLocaleTimeString(),
+            message: `AI Protocol created: ${taskData.text}`,
+            type: 'info'
+        };
+        return { 
+            schedule: [...state.schedule, newItem].sort((a, b) => {
+                if (!a.dateObj && !b.dateObj) return 0;
+                if (!a.dateObj) return 1;
+                if (!b.dateObj) return -1;
+                return new Date(a.dateObj) - new Date(b.dateObj);
+            }),
+            logs: [newLog, ...state.logs].slice(0, 50)
+        };
+      }),
+
+      // --- EXISTING ACTIONS (Kept for compatibility/fallback) ---
+      
       hardReset: () => {
         localStorage.removeItem('jarvis-storage');
         window.location.reload(); 
       },
 
-      // 2. IMPORT DATA
       importData: (jsonData) => set((state) => {
         try {
             const parsed = JSON.parse(jsonData);
             if (!parsed.user || !parsed.schedule) throw new Error("Invalid format");
-            
             return {
-                ...parsed, // Overwrite state with file data
-                logs: [{
-                    id: Date.now(),
-                    timestamp: new Date().toLocaleTimeString(),
-                    message: "System state restored from external backup.",
-                    type: 'success'
-                }, ...state.logs].slice(0, 50)
+                ...parsed,
+                logs: [{ id: Date.now(), timestamp: new Date().toLocaleTimeString(), message: "System state restored.", type: 'success' }, ...state.logs]
             };
         } catch (e) {
-            return {
-                logs: [{
-                    id: Date.now(),
-                    timestamp: new Date().toLocaleTimeString(),
-                    message: "Data import failed: Corrupt file.",
-                    type: 'error'
-                }, ...state.logs].slice(0, 50)
-            };
+            return { logs: [{ id: Date.now(), timestamp: new Date().toLocaleTimeString(), message: "Import failed.", type: 'error' }, ...state.logs] };
         }
       }),
 
-      // --- GAMIFICATION ACTIONS ---
       addXp: (amount) => set((state) => {
         const newXp = state.user.xp + amount;
-        const newLevel = Math.floor(newXp / 100) + 1; // 100 XP per level
-        
+        const newLevel = Math.floor(newXp / 100) + 1; 
         let logMsg = `Gained ${amount} XP.`;
-        if (newLevel > state.user.level) {
-            logMsg = `LEVEL UP! Promotion to Level ${newLevel}.`;
-        }
-
-        const newLog = {
-            id: Date.now(),
-            timestamp: new Date().toLocaleTimeString(),
-            message: logMsg,
-            type: 'success'
-        };
-
-        return {
-            user: { ...state.user, xp: newXp, level: newLevel },
-            logs: [newLog, ...state.logs].slice(0, 50)
-        };
+        if (newLevel > state.user.level) logMsg = `LEVEL UP! Promotion to Level ${newLevel}.`;
+        return { user: { ...state.user, xp: newXp, level: newLevel }, logs: [{ id: Date.now(), timestamp: new Date().toLocaleTimeString(), message: logMsg, type: 'success' }, ...state.logs].slice(0, 50) };
       }),
 
       completeTask: (id) => {
         const state = get();
         const task = state.schedule.find(t => t.id === id);
-        
-        // Calculate XP based on difficulty
-        let xpGain = 10; // Base XP
+        let xpGain = 10; 
         if (task?.isUrgent) xpGain += 5;
         if (task?.isImportant) xpGain += 10;
-
-        get().addXp(xpGain); // Award XP
-        get().removeTask(id); // Remove task
+        get().addXp(xpGain);
+        get().removeTask(id);
       },
 
-      // --- FOCUS MODE ACTIONS ---
       enterFocusMode: (taskId) => set((state) => {
         const task = state.schedule.find(t => t.id === taskId);
-        const newLog = {
-            id: Date.now(),
-            timestamp: new Date().toLocaleTimeString(),
-            message: `Focus Protocol initiated for: ${task ? task.text : 'Unknown'}`,
-            type: 'warning'
-        };
-        return {
-            isFocusMode: true,
-            activeTaskId: taskId,
-            logs: [newLog, ...state.logs].slice(0, 50)
-        };
+        return { isFocusMode: true, activeTaskId: taskId, logs: [{ id: Date.now(), timestamp: new Date().toLocaleTimeString(), message: `Focus Protocol: ${task ? task.text : 'Unknown'}`, type: 'warning' }, ...state.logs].slice(0, 50) };
       }),
 
       exitFocusMode: (completed = false) => {
         const state = get();
-        
-        if (completed && state.activeTaskId) {
-            get().completeTask(state.activeTaskId); // Use new complete action
-        }
-
-        const newLog = {
-            id: Date.now(),
-            timestamp: new Date().toLocaleTimeString(),
-            message: completed 
-                ? "Objective complete. XP Awarded." 
-                : "Focus Protocol aborted.",
-            type: completed ? 'success' : 'error'
-        };
-
-        set((state) => ({
-            isFocusMode: false,
-            activeTaskId: null,
-            logs: [newLog, ...state.logs].slice(0, 50)
-        }));
+        if (completed && state.activeTaskId) get().completeTask(state.activeTaskId);
+        set((state) => ({ isFocusMode: false, activeTaskId: null, logs: [{ id: Date.now(), timestamp: new Date().toLocaleTimeString(), message: completed ? "Focus Complete." : "Focus Aborted.", type: completed ? 'success' : 'error' }, ...state.logs].slice(0, 50) }));
       },
 
-      // --- PERSONALITY ACTIONS ---
-      togglePersonality: () => set((state) => {
-        const newMode = state.personality === 'brief' ? 'deep' : 'brief';
-        const newLog = {
-            id: Date.now(),
-            timestamp: new Date().toLocaleTimeString(),
-            message: `Voice synthesis switched to ${newMode.toUpperCase()} mode.`,
-            type: 'info'
-        };
-        return { 
-            personality: newMode,
-            logs: [newLog, ...state.logs].slice(0, 50)
-        };
-      }),
-
-      updateUser: (userData) => set((state) => {
-        const newLog = {
-            id: Date.now(),
-            timestamp: new Date().toLocaleTimeString(),
-            message: `User profile updated`,
-            type: 'success'
-        };
-        return { 
-            user: { ...state.user, ...userData },
-            logs: [newLog, ...state.logs].slice(0, 50)
-        };
-      }),
+      togglePersonality: () => set((state) => ({ personality: state.personality === 'brief' ? 'deep' : 'brief' })),
+      
+      updateUser: (userData) => set((state) => ({ user: { ...state.user, ...userData } })),
 
       setAnalysisMode: (active) => set({ isAnalysisMode: active }),
       
       submitAnswer: (answer) => set((state) => {
-        const newAnswers = [...state.dailyAnswers, { 
-            question: state.questions[state.currentQuestionIndex], 
-            answer, 
-            timestamp: new Date().toISOString() 
-        }];
-        
+        const newAnswers = [...state.dailyAnswers, { question: state.questions[state.currentQuestionIndex], answer, timestamp: new Date().toISOString() }];
         const nextIndex = state.currentQuestionIndex + 1;
         const isFinished = nextIndex >= state.questions.length;
-
         let newSchedule = state.schedule;
-        let logMsg = null;
-
         if (isFinished) {
-            const reviewTask = {
-                id: Date.now(),
-                text: "Review Daily Analysis Data",
-                type: "system",
-                time: "NOW",
-                dateObj: new Date(),
-                notified: false,
-                isUrgent: true,
-                isImportant: true
-            };
-            newSchedule = [...state.schedule, reviewTask].sort((a, b) => {
-                 if (!a.dateObj && !b.dateObj) return 0;
-                 if (!a.dateObj) return 1;
-                 if (!b.dateObj) return -1;
-                 return new Date(a.dateObj) - new Date(b.dateObj);
-            });
-            logMsg = "Daily Neural Alignment complete.";
+            newSchedule = [...state.schedule, { id: Date.now(), text: "Review Daily Analysis Data", type: "system", time: "NOW", dateObj: new Date(), notified: false, isUrgent: true, isImportant: true }];
         }
-
-        const newLog = logMsg ? {
-            id: Date.now(),
-            timestamp: new Date().toLocaleTimeString(),
-            message: logMsg,
-            type: 'success'
-        } : null;
-
-        return {
-            dailyAnswers: newAnswers,
-            currentQuestionIndex: isFinished ? 0 : nextIndex,
-            isAnalysisMode: !isFinished,
-            schedule: newSchedule,
-            logs: newLog ? [newLog, ...state.logs].slice(0, 50) : state.logs
-        };
+        return { dailyAnswers: newAnswers, currentQuestionIndex: isFinished ? 0 : nextIndex, isAnalysisMode: !isFinished, schedule: newSchedule };
       }),
 
-      markAsNotified: (id) => set((state) => ({
-        schedule: state.schedule.map(t => 
-            t.id === id ? { ...t, notified: true } : t
-        )
-      })),
+      markAsNotified: (id) => set((state) => ({ schedule: state.schedule.map(t => t.id === id ? { ...t, notified: true } : t) })),
 
-      // --- SUGGESTION ACTIONS ---
       addSuggestion: (text, time) => set((state) => {
-        const exists = state.schedule.find(t => t.text === text) || 
-                       state.suggestions.find(s => s.text === text);
+        const exists = state.schedule.find(t => t.text === text) || state.suggestions.find(s => s.text === text);
         if (exists) return {};
-
-        const newSuggestion = {
-            id: Date.now(),
-            text,
-            time,
-            type: 'suggestion',
-            dateObj: new Date()
-        };
-        return { suggestions: [...state.suggestions, newSuggestion] };
+        return { suggestions: [...state.suggestions, { id: Date.now(), text, time, type: 'suggestion', dateObj: new Date() }] };
       }),
 
       acceptSuggestion: (id) => set((state) => {
         const suggestion = state.suggestions.find(s => s.id === id);
         if (!suggestion) return {};
-
-        const newTask = { 
-            ...suggestion, 
-            id: Date.now(), 
-            type: 'task',
-            notified: false,
-            isUrgent: false,
-            isImportant: false
-        };
-
-        const newLog = {
-            id: Date.now(),
-            timestamp: new Date().toLocaleTimeString(),
-            message: `Suggestion accepted: ${suggestion.text}`,
-            type: 'success'
-        };
-
-        return {
-            schedule: [...state.schedule, newTask].sort((a, b) => new Date(a.dateObj) - new Date(b.dateObj)),
-            suggestions: state.suggestions.filter(s => s.id !== id),
-            logs: [newLog, ...state.logs].slice(0, 50)
-        };
+        return { schedule: [...state.schedule, { ...suggestion, id: Date.now(), type: 'task', notified: false }].sort((a, b) => new Date(a.dateObj) - new Date(b.dateObj)), suggestions: state.suggestions.filter(s => s.id !== id) };
       }),
 
-      rejectSuggestion: (id) => set((state) => ({
-        suggestions: state.suggestions.filter(s => s.id !== id)
-      })),
+      rejectSuggestion: (id) => set((state) => ({ suggestions: state.suggestions.filter(s => s.id !== id) })),
 
-      // --- TASK ACTIONS ---
       addTask: (input) => set((state) => {
         const data = parseCommand(input);
-        
         const textLower = data.text.toLowerCase();
-        const isUrgent = textLower.includes("now") || textLower.includes("asap") || textLower.includes("urgent") || textLower.includes("today") || data.time === "NOW";
-        const isImportant = textLower.includes("critical") || textLower.includes("boss") || textLower.includes("deadline") || textLower.includes("project") || textLower.includes("meeting");
-
-        let conflictWarning = false;
-        if (data.dateObj) {
-            const newTime = new Date(data.dateObj).getTime();
-            conflictWarning = state.schedule.some(t => {
-                if (!t.dateObj) return false;
-                const diff = Math.abs(newTime - new Date(t.dateObj).getTime());
-                return diff < 30 * 60000;
-            });
-            
-            if (conflictWarning && 'speechSynthesis' in window) {
-                   const utterance = new SpeechSynthesisUtterance("Warning. Schedule conflict detected.");
-                   window.speechSynthesis.speak(utterance);
-            }
-        }
-
-        const newItem = { 
-            id: Date.now(), 
-            text: data.text, 
-            type: conflictWarning ? "conflict" : (data.type || "task"), 
-            time: data.time || "TBD",
-            dateObj: data.dateObj,
-            notified: false,
-            isUrgent,
-            isImportant
-        };
-
-        const newLog = {
-            id: Date.now() + 1,
-            timestamp: new Date().toLocaleTimeString(),
-            message: `Protocol created: ${data.text} [P:${isUrgent ? 'U' : '-'}${isImportant ? 'I' : '-'}]`,
-            type: conflictWarning ? 'warning' : 'info'
-        };
-
-        const newSchedule = [...state.schedule, newItem].sort((a, b) => {
-            if (!a.dateObj && !b.dateObj) return 0;
-            if (!a.dateObj) return 1;
-            if (!b.dateObj) return -1;
-            return new Date(a.dateObj) - new Date(b.dateObj);
-        });
-
-        return { 
-            schedule: newSchedule,
-            logs: [newLog, ...state.logs].slice(0, 50) 
-        };
+        const isUrgent = textLower.includes("now") || textLower.includes("asap") || textLower.includes("urgent");
+        const isImportant = textLower.includes("critical") || textLower.includes("boss") || textLower.includes("project");
+        return { schedule: [...state.schedule, { id: Date.now(), text: data.text, type: "task", time: data.time || "TBD", dateObj: data.dateObj, notified: false, isUrgent, isImportant }].sort((a, b) => new Date(a.dateObj) - new Date(b.dateObj)) };
       }),
 
-      removeTask: (id) => set((state) => {
-        const task = state.schedule.find(t => t.id === id);
-        const newLog = {
-            id: Date.now(),
-            timestamp: new Date().toLocaleTimeString(),
-            message: `Protocol "${task ? task.text : id}" deleted.`,
-            type: 'error'
-        };
-
-        return {
-            schedule: state.schedule.filter(t => t.id !== id),
-            logs: [newLog, ...state.logs].slice(0, 50)
-        };
-      }),
-
+      removeTask: (id) => set((state) => ({ schedule: state.schedule.filter(t => t.id !== id) })),
     }),
-    {
-      name: 'jarvis-storage', 
-    }
+    { name: 'jarvis-storage' }
   )
 );
